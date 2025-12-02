@@ -1,0 +1,400 @@
+    const audio = audioRef.current;
+    if (audio && !audioContextRef.current) {
+      try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        const context = new AudioContext();
+        audioContextRef.current = context;
+
+        const source = context.createMediaElementSource(audio);
+        const analyser = context.createAnalyser();
+        analyser.fftSize = 4096;
+        analyser.smoothingTimeConstant = 0.7;
+        analyser.minDecibels = -90;
+        analyser.maxDecibels = -10;
+
+        sourceRef.current = source;
+        analyserRef.current = analyser;
+
+        source.connect(analyser);
+        analyser.connect(context.destination);
+      } catch (e) {
+        console.error("Audio init failed:", e);
+      }
+    }
+  }, []);
+
+  // --- Queue Management ---
+
+  const processPaths = useCallback(async (paths: string[]) => {
+    const audioExtensions = ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a'];
+    const validPaths = paths.filter(path => audioExtensions.some(ext => path.toLowerCase().endsWith(ext)));
+
+    if (validPaths.length === 0) return;
+
+    setIsLoading(true);
+
+    const newTracks: Track[] = validPaths.map(path => ({
+      id: `${Date.now()}-${Math.random()}`,
+      path,
+      filename: path.split(/[/\\]/).pop() || 'Unknown',
+      duration: 0,
+      artist: 'Loading...',
+      title: path.split(/[/\\]/).pop()?.replace(/\.[^/.]+$/, '') || 'Unknown',
+      metadataLoaded: false,
+    }));
+
+    setQueue(prev => [...prev, ...newTracks]);
+
+    // Process metadata in background
+    newTracks.forEach(async (track) => {
+      try {
+        const metadata = await invoke<RawMetadata>('get_audio_metadata', { filePath: track.path });
+
+        setQueue(prev => prev.map(t => {
+          if (t.id === track.id) {
+            return {
+              ...t,
+              metadataLoaded: true,
+              artist: metadata.artist || 'Unknown Artist',
+              title: metadata.title || track.title,
+              duration: metadata.duration || 0,
+            };
+          }
+          return t;
+        }));
+      } catch (e) {
+        console.error("Metadata error:", e);
+        setQueue(prev => prev.map(t => {
+          if (t.id === track.id) {
+            return { ...t, metadataLoaded: true };
+          }
+          return t;
+        }));
+      }
+    });
+
+    if (queue.length === 0 && newTracks.length > 0) {
+      setCurrentTrackIndex(0);
+      setIsPlaying(true);
+    }
+
+    setIsLoading(false);
+  }, [queue.length]);
+
+  const addFiles = useCallback(async () => {
+    try {
+      const selectedPaths = await open({
+        multiple: true,
+        title: 'Add Music Files',
+        filters: [{
+          name: 'Audio',
+          extensions: ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a']
+        }],
+      });
+
+      if (!selectedPaths) return;
+
+      const paths = Array.isArray(selectedPaths) ? selectedPaths : [selectedPaths];
+      await processPaths(paths);
+    } catch (e) {
+      console.error(e);
+      setIsLoading(false);
+    }
+  }, [processPaths]);
+
+  // Drag & Drop Listeners
+  useEffect(() => {
+    const unlistenDrop = listen('tauri://drag-drop', (event) => {
+      setIsDragging(false);
+      const payload = event.payload as { paths: string[] };
+      if (payload.paths && payload.paths.length > 0) {
+        processPaths(payload.paths);
+      }
+    });
+
+    const unlistenEnter = listen('tauri://drag-enter', () => {
+      setIsDragging(true);
+    });
+
+    const unlistenLeave = listen('tauri://drag-leave', () => {
+      setIsDragging(false);
+    });
+
+    return () => {
+      unlistenDrop.then(f => f());
+      unlistenEnter.then(f => f());
+      unlistenLeave.then(f => f());
+    };
+  }, [processPaths]);
+
+  // --- Playlist Management ---
+
+  const handleSavePlaylist = async (name: string) => {
+    try {
+      const tracksToSave = queue.map(t => ({
+        path: t.path,
+        filename: t.filename,
+        duration: isFinite(t.duration) ? t.duration : 0,
+        artist: t.artist === 'Unknown Artist' ? null : t.artist,
+        title: t.title === 'Unknown' ? null : t.title
+      }));
+
+      await invoke('save_playlist', { name, tracks: tracksToSave });
+      alert(`Playlist "${name}" saved!`);
+      setIsSaveModalOpen(false);
+    } catch (e) {
+      console.error("Failed to save playlist:", e);
+      alert("Failed to save playlist: " + e);
+    }
+  };
+
+  const openSaveModal = () => {
+    if (queue.length === 0) return;
+    setIsSaveModalOpen(true);
+  };
+
+  const playPlaylist = async (name: string) => {
+    console.log("🎵 playPlaylist called with name:", name);
+    try {
+      setIsLoading(true);
+      console.log("📡 Invoking load_playlist command...");
+      const tracks = await invoke<any[]>('load_playlist', { name });
+      console.log("✅ Tracks loaded from backend:", tracks);
+      
+      const newTracks: Track[] = tracks.map((t: any) => ({
+        id: `${Date.now()}-${Math.random()}`,
+        path: t.path,
+        filename: t.filename,
+        duration: t.duration,
+        artist: t.artist || 'Unknown Artist',
+        title: t.title || 'Unknown',
+        metadataLoaded: true,
+      }));
+
+      console.log("🎼 Mapped tracks:", newTracks);
+      setQueue(newTracks);
+      setCurrentTrackIndex(0);
+      setIsPlaying(true);
+      setActiveTab('queue');
+      console.log("✅ Playlist loaded successfully, switched to queue tab");
+    } catch (e) {
+      console.error("❌ Failed to load playlist:", e);
+      alert("Failed to load playlist: " + e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- Playback Control ---
+
+  const playTrack = (index: number) => {
+    setCurrentTrackIndex(index);
+    setIsPlaying(true);
+  };
+
+  const togglePlayPause = () => {
+    if (!currentTrack && queue.length > 0) {
+      playTrack(0);
+    } else {
+      setIsPlaying(p => !p);
+    }
+  };
+
+  const playNext = useCallback(() => {
+    if (queue.length === 0) return;
+    let nextIndex = 0;
+    if (shuffle) {
+      nextIndex = Math.floor(Math.random() * queue.length);
+    } else {
+      nextIndex = (currentTrackIndex === null || currentTrackIndex === queue.length - 1)
+        ? 0 : currentTrackIndex + 1;
+    }
+    setCurrentTrackIndex(nextIndex);
+  }, [queue.length, currentTrackIndex, shuffle]);
+
+  const playPrevious = useCallback(() => {
+    if (queue.length === 0) return;
+    if (currentTime > 3) {
+      if (audioRef.current) audioRef.current.currentTime = 0;
+      return;
+    }
+    const prevIndex = (!currentTrackIndex || currentTrackIndex === 0)
+      ? queue.length - 1 : currentTrackIndex - 1;
+    setCurrentTrackIndex(prevIndex);
+  }, [queue.length, currentTrackIndex, currentTime]);
+
+  const handleSeek = (time: number) => {
+    setCurrentTime(time);
+    if (audioRef.current) audioRef.current.currentTime = time;
+  };
+
+  const removeFromQueue = (index: number) => {
+    setQueue(q => q.filter((_, idx) => idx !== index));
+  };
+
+  // --- Effects ---
+
+  // Audio Source & Playback
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !currentTrack || !currentTrack.metadataLoaded) return;
+
+    const src = convertFileSrc(currentTrack.path);
+    if (audio.src !== src) {
+      audio.src = src;
+      audio.load();
+      setDuration(currentTrack.duration);
+      if (isPlaying) {
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(error => console.error("Playback failed:", error));
+        }
+        // Init context on first play if needed
+        if (!audioContextRef.current && activeTab === 'visualizer') {
+          initializeAudioContext();
+        }
+      }
+    }
+  }, [currentTrack, isPlaying, activeTab, initializeAudioContext]);
+
+  // Play/Pause Toggle
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying && audio.paused) {
+      audio.play().catch(e => console.error(e));
+      if (audioContextRef.current?.state === 'suspended') {
+        audioContextRef.current.resume();
+      }
+    } else if (!isPlaying && !audio.paused) {
+      audio.pause();
+    }
+  }, [isPlaying]);
+
+  // Volume
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = isMuted ? 0 : volume;
+    }
+  }, [volume, isMuted]);
+
+  // Audio Events
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const onEnded = () => {
+      if (repeat === 'one') {
+        audio.currentTime = 0;
+        audio.play();
+      } else {
+        playNext();
+      }
+    };
+
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('ended', onEnded);
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      audio.removeEventListener('ended', onEnded);
+    };
+  }, [playNext, repeat]);
+
+  // Keyboard
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.code === 'Space') { e.preventDefault(); togglePlayPause(); }
+      else if (e.code === 'ArrowRight') playNext();
+      else if (e.code === 'ArrowLeft') playPrevious();
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [togglePlayPause, playNext, playPrevious]);
+
+  return (
+    <div className="h-screen w-screen bg-gray-950 text-white flex flex-col overflow-hidden selection:bg-cyan-500/30">
+
+      {/* Top Bar */}
+      <TopBar
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        visualizerStyle={visualizerStyle}
+        setVisualizerStyle={setVisualizerStyle}
+        addFiles={addFiles}
+        onVisualizerClick={() => setTimeout(() => initializeAudioContext(), 100)}
+      />
+
+      {/* Main Content */}
+      <div className="flex-1 relative overflow-hidden">
+
+        {/* Visualizer Layer */}
+        <div className={`absolute inset-0 transition-opacity duration-500 ${activeTab === 'visualizer' ? 'opacity-100 z-10' : 'opacity-0 -z-10'}`}>
+          <VisualizerView
+            analyser={analyserRef.current}
+            visualizerStyle={visualizerStyle}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+          />
+        </div>
+
+        {/* Home Layer */}
+        <div className={`absolute inset-0 overflow-hidden bg-gray-950 transition-opacity duration-300 ${activeTab === 'home' ? 'opacity-100 z-10' : 'opacity-0 -z-10'}`}>
+          {activeTab === 'home' && <Home onPlayPlaylist={playPlaylist} />}
+        </div>
+
+        {/* Queue Layer */}
+        <div className={`absolute inset-0 overflow-hidden flex flex-col bg-gray-950 transition-opacity duration-300 ${activeTab === 'queue' ? 'opacity-100 z-10' : 'opacity-0 -z-10'}`}>
+          <QueueView
+            queue={queue}
+            currentTrackIndex={currentTrackIndex}
+            isPlaying={isPlaying}
+            playTrack={playTrack}
+            removeFromQueue={removeFromQueue}
+            openSaveModal={openSaveModal}
+            addFiles={addFiles}
+            searchQuery={searchQuery}
+          />
+        </div>
+      </div>
+
+      {/* Player Bar */}
+      <PlayerBar
+        currentTrack={currentTrack}
+        isPlaying={isPlaying}
+        togglePlayPause={togglePlayPause}
+        playNext={playNext}
+        playPrevious={playPrevious}
+        shuffle={shuffle}
+        setShuffle={setShuffle}
+        repeat={repeat}
+        setRepeat={setRepeat}
+        currentTime={currentTime}
+        duration={duration}
+        setCurrentTime={setCurrentTime}
+        onSeek={handleSeek}
+        volume={volume}
+        setVolume={setVolume}
+        isMuted={isMuted}
+        setIsMuted={setIsMuted}
+      />
+
+      {/* Drag & Drop Overlay */}
+      <DragDropOverlay isDragging={isDragging} />
+
+      {/* Audio Element */}
+      <audio ref={audioRef} crossOrigin="anonymous" />
+      
+      {/* Save Playlist Modal */}
+      <SavePlaylistModal 
+        isOpen={isSaveModalOpen} 
+        onClose={() => setIsSaveModalOpen(false)} 
+        onSave={handleSavePlaylist} 
+      />
+    </div>
+  );
+};
+
+export default MusicPlayer;
