@@ -1,8 +1,18 @@
-import React from 'react';
-import { Pause, Play, SkipForward, SkipBack, Volume2, VolumeX, Shuffle, Repeat, Repeat1 } from 'lucide-react';
-import IconButton from './IconButton';
-import { Track, RepeatMode } from '../types';
-import { formatTime } from '../utils';
+import React from "react";
+import {
+  Pause,
+  Play,
+  SkipForward,
+  SkipBack,
+  Volume2,
+  VolumeX,
+  Shuffle,
+  Repeat,
+  Repeat1,
+} from "lucide-react";
+import IconButton from "./IconButton";
+import { Track, RepeatMode } from "../types";
+import { formatTime } from "../utils";
 
 interface PlayerBarProps {
   currentTrack: Track | null;
@@ -49,23 +59,25 @@ const PlayerBar: React.FC<PlayerBarProps> = ({
   volume,
   setVolume,
   isMuted,
-  setIsMuted
+  setIsMuted,
 }) => {
-  
   const cycleRepeat = () => {
-    const next = repeat === 'none' ? 'all' : repeat === 'all' ? 'one' : 'none';
+    const next = repeat === "none" ? "all" : repeat === "all" ? "one" : "none";
     setRepeat(next);
   };
 
   return (
     <div className="h-24 bg-gray-900/90 backdrop-blur-xl border-t border-white/5 flex items-center px-6 gap-6 z-30">
-
       {/* Track Info */}
       <div className="w-1/4 min-w-[200px]">
         {currentTrack ? (
           <div>
-            <div className="font-bold text-white truncate">{currentTrack.title}</div>
-            <div className="text-sm text-gray-400 truncate">{currentTrack.artist}</div>
+            <div className="font-bold text-white truncate">
+              {currentTrack.title}
+            </div>
+            <div className="text-sm text-gray-400 truncate">
+              {currentTrack.artist}
+            </div>
           </div>
         ) : (
           <div className="text-gray-600 text-sm">Select a track to play</div>
@@ -75,37 +87,59 @@ const PlayerBar: React.FC<PlayerBarProps> = ({
       {/* Controls */}
       <div className="flex-1 flex flex-col items-center gap-2">
         <div className="flex items-center gap-4">
-          <IconButton icon={Shuffle} active={shuffle} onClick={() => setShuffle(!shuffle)} size={18} />
-          <IconButton icon={SkipBack} onClick={playPrevious} disabled={!currentTrack} />
+          <IconButton
+            icon={Shuffle}
+            active={shuffle}
+            onClick={() => setShuffle(!shuffle)}
+            size={18}
+          />
+          <IconButton
+            icon={SkipBack}
+            onClick={playPrevious}
+            disabled={!currentTrack}
+          />
           <button
             onClick={togglePlayPause}
             disabled={!currentTrack}
             className="w-10 h-10 rounded-full bg-white text-black hover:scale-105 active:scale-95 transition-all flex items-center justify-center disabled:opacity-50 disabled:scale-100"
           >
-            {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-0.5" />}
+            {isPlaying ? (
+              <Pause size={20} fill="currentColor" />
+            ) : (
+              <Play size={20} fill="currentColor" className="ml-0.5" />
+            )}
           </button>
-          <IconButton icon={SkipForward} onClick={playNext} disabled={!currentTrack} />
-          <IconButton 
-            icon={repeat === 'one' ? Repeat1 : Repeat} 
-            active={repeat !== 'none'} 
-            onClick={cycleRepeat} 
-            size={18} 
+          <IconButton
+            icon={SkipForward}
+            onClick={playNext}
+            disabled={!currentTrack}
+          />
+          <IconButton
+            icon={repeat === "one" ? Repeat1 : Repeat}
+            active={repeat !== "none"}
+            onClick={cycleRepeat}
+            size={18}
           />
         </div>
 
         <div className="w-full max-w-md flex items-center gap-3 text-xs font-mono text-gray-400">
           <span>{formatTime(currentTime)}</span>
-          <div className="flex-1 h-1 bg-gray-700 rounded-full relative group cursor-pointer">
+          <div className="flex-1 h-1 bg-gray-700 rounded-full relative group cursor-pointer overflow-hidden">
             <div
               className="absolute inset-y-0 left-0 bg-cyan-500 rounded-full"
-              style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
+              style={{
+                width: `${Math.min(
+                  (currentTime / (duration || 1)) * 100,
+                  100
+                )}%`,
+              }}
             ></div>
             <input
               type="range"
               min={0}
               max={duration || 100}
               value={currentTime}
-              onChange={e => onSeek(parseFloat(e.target.value))}
+              onChange={(e) => onSeek(parseFloat(e.target.value))}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
           </div>
@@ -115,8 +149,15 @@ const PlayerBar: React.FC<PlayerBarProps> = ({
 
       {/* Volume */}
       <div className="w-1/4 min-w-[150px] flex justify-end items-center gap-2">
-        <button onClick={() => setIsMuted(!isMuted)} className="text-gray-400 hover:text-white">
-          {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+        <button
+          onClick={() => setIsMuted(!isMuted)}
+          className="text-gray-400 hover:text-white"
+        >
+          {isMuted || volume === 0 ? (
+            <VolumeX size={18} />
+          ) : (
+            <Volume2 size={18} />
+          )}
         </button>
         <div className="w-24 h-1 bg-gray-700 rounded-full relative group">
           <div
@@ -129,7 +170,7 @@ const PlayerBar: React.FC<PlayerBarProps> = ({
             max={1}
             step={0.01}
             value={isMuted ? 0 : volume}
-            onChange={e => {
+            onChange={(e) => {
               setVolume(parseFloat(e.target.value));
               setIsMuted(false);
             }}
@@ -137,7 +178,6 @@ const PlayerBar: React.FC<PlayerBarProps> = ({
           />
         </div>
       </div>
-
     </div>
   );
 };

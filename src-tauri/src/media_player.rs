@@ -74,7 +74,10 @@ fn try_mp4_metadata(path: &Path) -> (Option<String>, Option<String>, Option<Stri
 }
 
 // Try to read metadata using Symphonia (for FLAC, WAV, OGG, etc.)
-fn try_symphonia_metadata(path: &Path) -> (Option<String>, Option<String>, Option<String>, f64) {
+fn try_symphonia_metadata(
+    path: &Path,
+    enable_gapless: bool,
+) -> (Option<String>, Option<String>, Option<String>, f64) {
     let source = match File::open(path) {
         Ok(file) => file,
         Err(e) => {
@@ -90,12 +93,12 @@ fn try_symphonia_metadata(path: &Path) -> (Option<String>, Option<String>, Optio
     }
 
     let format_opts = symphonia::core::formats::FormatOptions {
-        enable_gapless: true,
+        enable_gapless,
         ..Default::default()
     };
     let metadata_opts = symphonia::core::meta::MetadataOptions {
-        limit_metadata_bytes: symphonia::core::meta::Limit::Maximum(usize::MAX),
-        limit_visual_bytes: symphonia::core::meta::Limit::Maximum(usize::MAX),
+        limit_metadata_bytes: symphonia::core::meta::Limit::Maximum(50 * 1024 * 1024), // 50 MB limit
+        limit_visual_bytes: symphonia::core::meta::Limit::Maximum(50 * 1024 * 1024),
     };
 
     let probed =
@@ -203,7 +206,7 @@ fn try_symphonia_metadata(path: &Path) -> (Option<String>, Option<String>, Optio
 }
 
 #[tauri::command]
-pub async fn get_audio_metadata(file_path: String) -> Result<Track, String> {
+pub async fn get_audio_metadata(file_path: String, enable_gapless: bool) -> Result<Track, String> {
     let result = tauri::async_runtime::spawn(async move {
         let path = Path::new(&file_path);
 
@@ -224,6 +227,19 @@ pub async fn get_audio_metadata(file_path: String) -> Result<Track, String> {
             filename, extension
         );
 
+        // Safety CHECK: If file is huge (> 3GB), force disable gapless scan to prevent crash
+        // This heuristic protects against OOM on massive FLAC rips while allowing gapless for normal sized tracks.
+        let file_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+        let safe_enable_gapless = if enable_gapless && file_size > 3 * 1024 * 1024 * 1024 {
+            eprintln!(
+                "⚠️ Safety Override: File size {} MB is too large for gapless scan. Disabling gapless to prevent crash.",
+                file_size / (1024 * 1024)
+            );
+            false
+        } else {
+            enable_gapless
+        };
+
         // Try different metadata readers based on file extension
         let (mut artist, mut title, mut album, mut duration) = match extension.as_str() {
             "mp3" => try_id3_metadata(path),
@@ -234,7 +250,8 @@ pub async fn get_audio_metadata(file_path: String) -> Result<Track, String> {
         // If specialized reader didn't work or for other formats, try Symphonia
         if artist.is_none() || title.is_none() || album.is_none() || duration == 0.0 {
             eprintln!("Trying Symphonia as fallback...");
-            let (sym_artist, sym_title, sym_album, sym_duration) = try_symphonia_metadata(path);
+            let (sym_artist, sym_title, sym_album, sym_duration) =
+                try_symphonia_metadata(path, safe_enable_gapless);
 
             if artist.is_none() {
                 artist = sym_artist;
@@ -479,12 +496,12 @@ pub async fn get_audio_file_info(file_path: String) -> Result<AudioFileInfo, Str
         let (mut artist, mut title, mut album, _) = match extension.as_str() {
             "mp3" => try_id3_metadata(path),
             "m4a" | "mp4" | "aac" => try_mp4_metadata(path),
-            _ => try_symphonia_metadata(path),
+            _ => try_symphonia_metadata(path, false),
         };
 
         // Fallback to symphonia if specific readers failed
         if artist.is_none() || title.is_none() || album.is_none() {
-            let (sym_artist, sym_title, sym_album, _) = try_symphonia_metadata(path);
+            let (sym_artist, sym_title, sym_album, _) = try_symphonia_metadata(path, false);
             if artist.is_none() {
                 artist = sym_artist;
             }

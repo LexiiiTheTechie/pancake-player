@@ -47,6 +47,8 @@ const MusicPlayer: React.FC = () => {
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [viewingPlaylist, setViewingPlaylist] = useState<string | null>(null);
   const [showFps, setShowFps] = useState(false);
+  // Add gapless toggle state (default true, safety check handles large files)
+  const [enableGapless, setEnableGapless] = useState(true);
 
   const currentTrack =
     currentTrackIndex !== null ? queue[currentTrackIndex] : null;
@@ -97,6 +99,7 @@ const MusicPlayer: React.FC = () => {
         try {
           const metadata = await invoke<RawMetadata>("get_audio_metadata", {
             filePath: track.path,
+            enableGapless: enableGapless,
           });
           return { trackId: track.id, metadata, success: true };
         } catch (e) {
@@ -137,7 +140,7 @@ const MusicPlayer: React.FC = () => {
 
       setIsLoading(false);
     },
-    [queue.length]
+    [queue.length, enableGapless]
   );
 
   const addFiles = useCallback(async () => {
@@ -458,7 +461,11 @@ const MusicPlayer: React.FC = () => {
         }
       }
 
-      setDuration(engine.duration);
+      if (currentTrack.duration > 0) {
+        setDuration(currentTrack.duration);
+      } else {
+        setDuration(engine.duration || 0);
+      }
 
       // Set up onEnded callback
       engine.setOnEnded(() => {
@@ -516,10 +523,18 @@ const MusicPlayer: React.FC = () => {
     const interval = setInterval(() => {
       if (engineRef.current && isPlaying) {
         setCurrentTime(engineRef.current.currentTime);
+        // Also update duration if it wasn't valid initially or is different (e.g. VBR)
+        // But prefer metadata duration if we have it to avoid "0" jumps
+        if (
+          engineRef.current.duration > 0 &&
+          Math.abs(engineRef.current.duration - duration) > 1
+        ) {
+          setDuration(engineRef.current.duration);
+        }
       }
     }, 100); // Poll every 100ms
     return () => clearInterval(interval);
-  }, [isPlaying]);
+  }, [isPlaying, duration]);
 
   // Keyboard
   useEffect(() => {
@@ -601,6 +616,8 @@ const MusicPlayer: React.FC = () => {
         onVisualizerClick={() => {}}
         showFps={showFps}
         setShowFps={setShowFps}
+        enableGapless={enableGapless}
+        setEnableGapless={setEnableGapless}
       />
 
       {/* Main Content */}

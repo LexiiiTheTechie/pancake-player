@@ -1,5 +1,5 @@
 import React from "react";
-import { Search, Music2, Home as HomeIcon, Plus } from "lucide-react";
+import { Search, Music2, Home as HomeIcon, Plus, Layers } from "lucide-react";
 import { Tab, VisualizerStyle } from "../types";
 
 interface TopBarProps {
@@ -13,6 +13,8 @@ interface TopBarProps {
   onVisualizerClick: () => void;
   showFps: boolean;
   setShowFps: (show: boolean) => void;
+  enableGapless: boolean;
+  setEnableGapless: (enable: boolean) => void;
 }
 
 const TopBar: React.FC<TopBarProps> = ({
@@ -26,6 +28,8 @@ const TopBar: React.FC<TopBarProps> = ({
   onVisualizerClick,
   showFps,
   setShowFps,
+  enableGapless,
+  setEnableGapless,
 }) => {
   return (
     <div className="h-16 flex items-center justify-between px-6 bg-black/20 backdrop-blur-md border-b border-white/5 z-20">
@@ -112,6 +116,18 @@ const TopBar: React.FC<TopBarProps> = ({
             </button>
           </div>
         )}
+
+        <button
+          onClick={() => setEnableGapless(!enableGapless)}
+          className={`ml-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all border border-white/5 flex items-center gap-1 ${
+            enableGapless
+              ? "bg-blue-500/20 text-blue-400"
+              : "bg-white/5 text-gray-400 hover:text-white"
+          }`}
+          title="Enable gapless playback scanning (High Precision)"
+        >
+          <Layers size={12} /> {enableGapless ? "Gapless On" : "Gapless Off"}
+        </button>
 
         <button
           onClick={() => setShowFps(!showFps)}
