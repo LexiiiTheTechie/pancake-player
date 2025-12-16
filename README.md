@@ -187,4 +187,3 @@ Project Link: [https://github.com/LexiiiTheTechie/pancake-player](https://github
 ---
 
 Made with ❤️ and 🥞
-# pancake-player
