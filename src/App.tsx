@@ -49,6 +49,8 @@ const MusicPlayer: React.FC = () => {
   const [showFps, setShowFps] = useState(false);
   // Add gapless toggle state (default true, safety check handles large files)
   const [enableGapless, setEnableGapless] = useState(true);
+  const [enableShake, setEnableShake] = useState(true); // Screen Shake toggle
+  // HMR Trigger: 3
 
   const currentTrack =
     currentTrackIndex !== null ? queue[currentTrackIndex] : null;
@@ -95,6 +97,7 @@ const MusicPlayer: React.FC = () => {
 
       // 2. Fetch metadata in parallel batches to maximize throughput
       // We process all of them in parallel, letting the OS/Rust backend handle the threading
+
       const metadataPromises = newTracks.map(async (track) => {
         try {
           const metadata = await invoke<RawMetadata>("get_audio_metadata", {
@@ -469,6 +472,12 @@ const MusicPlayer: React.FC = () => {
 
       // Set up onEnded callback
       engine.setOnEnded(() => {
+        // Skip if we already did a pre-end gapless switch
+        if (gaplessSwitchedRef.current) {
+          console.log("🔇 onEnded skipped - already switched via gapless");
+          return;
+        }
+
         if (repeat === "one") {
           engine.seek(0);
           engine.play();
@@ -518,23 +527,49 @@ const MusicPlayer: React.FC = () => {
     }
   }, [queue, currentTrackIndex, repeat]);
 
-  // Time Update Polling
+  // Time Update Polling & Pre-End Gapless Trigger
+  const gaplessSwitchedRef = useRef(false);
+
   useEffect(() => {
     const interval = setInterval(() => {
       if (engineRef.current && isPlaying) {
-        setCurrentTime(engineRef.current.currentTime);
-        // Also update duration if it wasn't valid initially or is different (e.g. VBR)
-        // But prefer metadata duration if we have it to avoid "0" jumps
+        const engine = engineRef.current;
+        setCurrentTime(engine.currentTime);
+
+        // Pre-end gapless check (trigger switch ~100ms before end)
+        const timeUntilEnd = engine.getTimeUntilEnd();
         if (
-          engineRef.current.duration > 0 &&
-          Math.abs(engineRef.current.duration - duration) > 1
+          timeUntilEnd <= 0.15 &&
+          timeUntilEnd > 0 &&
+          !gaplessSwitchedRef.current
         ) {
-          setDuration(engineRef.current.duration);
+          // Time to switch!
+          if (repeat !== "one" && engine.startNextTrackNow()) {
+            gaplessSwitchedRef.current = true;
+
+            // Update React state to match
+            let nextIndex = (currentTrackIndex ?? 0) + 1;
+            if (nextIndex >= queue.length) {
+              if (repeat === "all") nextIndex = 0;
+              // else: let it end naturally
+            }
+            if (nextIndex < queue.length) {
+              setCurrentTrackIndex(nextIndex);
+            }
+          }
+        } else if (timeUntilEnd > 0.5) {
+          // Reset switch flag when we're safely into a track
+          gaplessSwitchedRef.current = false;
+        }
+
+        // Also update duration if it wasn't valid initially or is different (e.g. VBR)
+        if (engine.duration > 0 && Math.abs(engine.duration - duration) > 1) {
+          setDuration(engine.duration);
         }
       }
-    }, 100); // Poll every 100ms
+    }, 50); // Faster polling for tighter gapless (50ms instead of 100ms)
     return () => clearInterval(interval);
-  }, [isPlaying, duration]);
+  }, [isPlaying, duration, currentTrackIndex, queue.length, repeat]);
 
   // Keyboard
   useEffect(() => {
@@ -618,6 +653,8 @@ const MusicPlayer: React.FC = () => {
         setShowFps={setShowFps}
         enableGapless={enableGapless}
         setEnableGapless={setEnableGapless}
+        enableShake={enableShake}
+        setEnableShake={setEnableShake}
       />
 
       {/* Main Content */}
@@ -630,10 +667,12 @@ const MusicPlayer: React.FC = () => {
         >
           <VisualizerView
             analyser={engineRef.current?.analyserNode || null}
+            channels={engineRef.current?.channels}
             visualizerStyle={visualizerStyle}
             currentTrack={currentTrack}
             isPlaying={isPlaying}
             showFps={showFps}
+            enableShake={enableShake}
           />
         </div>
 

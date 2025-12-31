@@ -1,5 +1,12 @@
 import React from "react";
-import { Search, Music2, Home as HomeIcon, Plus, Layers } from "lucide-react";
+import {
+  Search,
+  Music2,
+  Home as HomeIcon,
+  Plus,
+  Layers,
+  Activity,
+} from "lucide-react";
 import { Tab, VisualizerStyle } from "../types";
 
 interface TopBarProps {
@@ -15,6 +22,8 @@ interface TopBarProps {
   setShowFps: (show: boolean) => void;
   enableGapless: boolean;
   setEnableGapless: (enable: boolean) => void;
+  enableShake: boolean;
+  setEnableShake: (enable: boolean) => void;
 }
 
 const TopBar: React.FC<TopBarProps> = ({
@@ -30,6 +39,8 @@ const TopBar: React.FC<TopBarProps> = ({
   setShowFps,
   enableGapless,
   setEnableGapless,
+  enableShake,
+  setEnableShake,
 }) => {
   return (
     <div className="h-16 flex items-center justify-between px-6 bg-black/20 backdrop-blur-md border-b border-white/5 z-20">
@@ -114,6 +125,16 @@ const TopBar: React.FC<TopBarProps> = ({
             >
               Standard
             </button>
+            <button
+              onClick={() => setVisualizerStyle("surround")}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                visualizerStyle === "surround"
+                  ? "bg-cyan-500/20 text-cyan-400"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Surround
+            </button>
           </div>
         )}
 
@@ -127,6 +148,18 @@ const TopBar: React.FC<TopBarProps> = ({
           title="Enable gapless playback scanning (High Precision)"
         >
           <Layers size={12} /> {enableGapless ? "Gapless On" : "Gapless Off"}
+        </button>
+
+        <button
+          onClick={() => setEnableShake(!enableShake)}
+          className={`ml-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all border border-white/5 flex items-center gap-1 ${
+            enableShake
+              ? "bg-purple-500/20 text-purple-400"
+              : "bg-white/5 text-gray-400 hover:text-white"
+          }`}
+          title="Enable screen shake on heavy bass"
+        >
+          <Activity size={12} /> {enableShake ? "Shake On" : "Shake Off"}
         </button>
 
         <button
