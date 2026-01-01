@@ -60,22 +60,40 @@ const FileInfoModal: React.FC<FileInfoModalProps> = ({
             </div>
           ) : fileInfo ? (
             <div className="space-y-4">
-              {/* Basic Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-800/50 p-4 rounded-xl border border-white/5">
-                  <div className="flex items-center gap-2 text-gray-400 text-sm mb-1">
-                    <HardDrive size={14} /> File Size
-                  </div>
-                  <div className="text-white font-mono text-lg">
-                    {formatSize(fileInfo.size_bytes)}
-                  </div>
+              {/* Header with Image and Basic Info */}
+              <div className="flex flex-col md:flex-row gap-6">
+                {/* Cover Art */}
+                <div className="w-full md:w-40 h-40 shrink-0 relative group">
+                  {fileInfo.cover_image ? (
+                    <img
+                      src={`data:image/jpeg;base64,${fileInfo.cover_image}`}
+                      alt="Album Art"
+                      className="w-full h-full object-cover rounded-xl shadow-lg border border-white/5"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gray-800 rounded-xl flex items-center justify-center border border-white/5">
+                      <Music2 className="w-12 h-12 text-gray-700" />
+                    </div>
+                  )}
                 </div>
-                <div className="bg-gray-800/50 p-4 rounded-xl border border-white/5">
-                  <div className="flex items-center gap-2 text-gray-400 text-sm mb-1">
-                    <Clock size={14} /> Duration
+
+                {/* Basic Info Cards */}
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-gray-800/50 p-4 rounded-xl border border-white/5 flex flex-col justify-center">
+                    <div className="flex items-center gap-2 text-gray-400 text-sm mb-1">
+                      <HardDrive size={14} /> File Size
+                    </div>
+                    <div className="text-white font-mono text-lg">
+                      {formatSize(fileInfo.size_bytes)}
+                    </div>
                   </div>
-                  <div className="text-white font-mono text-lg">
-                    {formatTime(fileInfo.duration)}
+                  <div className="bg-gray-800/50 p-4 rounded-xl border border-white/5 flex flex-col justify-center">
+                    <div className="flex items-center gap-2 text-gray-400 text-sm mb-1">
+                      <Clock size={14} /> Duration
+                    </div>
+                    <div className="text-white font-mono text-lg">
+                      {formatTime(fileInfo.duration)}
+                    </div>
                   </div>
                 </div>
               </div>

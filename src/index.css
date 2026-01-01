@@ -13,7 +13,7 @@
   .glass {
     @apply bg-white/5 backdrop-blur-xl border border-white/10;
   }
-  
+
   .glass-hover {
     @apply hover:bg-white/10 transition-all duration-300;
   }
@@ -23,7 +23,98 @@
   }
 }
 
+/* Custom Animations */
+@keyframes overlayShow {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0);
+  }
+
+  to {
+    opacity: 1;
+    backdrop-filter: blur(4px);
+  }
+}
+
+@keyframes overlayHide {
+  from {
+    opacity: 1;
+    backdrop-filter: blur(4px);
+  }
+
+  to {
+    opacity: 0;
+    backdrop-filter: blur(0);
+  }
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes modalOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+}
+
+.animate-overlay-in {
+  animation: overlayShow 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-overlay-out {
+  animation: overlayHide 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-modal-in {
+  animation: modalIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-modal-out {
+  animation: modalOut 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes tabIn {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-tab-in {
+  animation: tabIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* Custom Scrollbar */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Pause,
   Play,
@@ -23,25 +23,57 @@ interface PlayerBarProps {
   shuffle: boolean;
   setShuffle: (shuffle: boolean) => void;
   repeat: RepeatMode;
-  setRepeat: (repeat: RepeatMode) => void; // This needs to handle the logic or just set state
-  // Actually in App.tsx it was: setRepeat(r => r === 'none' ? 'all' : r === 'all' ? 'one' : 'none')
-  // I will pass a function that cycles repeat mode or just the setter.
-  // Let's pass the cycle logic handler from App.tsx or handle it here.
-  // The prop type says setRepeat: (repeat: RepeatMode) => void.
-  // I'll handle the cycling in the onClick here if I pass the setter, OR I can pass a toggleRepeat function.
-  // Let's pass setRepeat and handle cycling here for now, or assume the parent passes a setter.
-  // App.tsx uses setRepeat(r => ...).
-  // I'll change the prop to `toggleRepeat` for cleaner API, or just `setRepeat`.
-  // Let's stick to `setRepeat` and I'll implement the cycle logic here.
+  setRepeat: (repeat: RepeatMode) => void;
   currentTime: number;
   duration: number;
   setCurrentTime: (time: number) => void;
-  onSeek: (time: number) => void; // Separate seek handler for the range input
+  onSeek: (time: number) => void;
   volume: number;
   setVolume: (volume: number) => void;
   isMuted: boolean;
   setIsMuted: (isMuted: boolean) => void;
 }
+
+const VolumeInput: React.FC<{
+  value: number;
+  onChange: (val: number) => void;
+}> = ({ value, onChange }) => {
+  const [inputValue, setInputValue] = useState(
+    Math.round(value * 100).toString()
+  );
+
+  useEffect(() => {
+    setInputValue(Math.round(value * 100).toString());
+  }, [value]);
+
+  const handleBlur = () => {
+    let num = parseInt(inputValue);
+    if (isNaN(num)) num = 0;
+    const clamped = Math.min(100, Math.max(0, num));
+    setInputValue(clamped.toString());
+    onChange(clamped / 100);
+  };
+
+  return (
+    <div className="flex items-center group/input min-w-[28px]">
+      <input
+        type="text"
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        className="w-5 bg-transparent border-none text-right font-mono text-[11px] text-gray-400 group-hover/input:text-white focus:text-cyan-400 focus:outline-none focus:ring-0 p-0 selection:bg-cyan-500/30 transition-colors"
+      />
+      <span className="text-[10px] text-gray-500 ml-0.5 group-hover/input:text-gray-300 transition-colors">
+        %
+      </span>
+    </div>
+  );
+};
 
 const PlayerBar: React.FC<PlayerBarProps> = ({
   currentTrack,
@@ -147,34 +179,56 @@ const PlayerBar: React.FC<PlayerBarProps> = ({
         </div>
       </div>
 
-      {/* Volume */}
-      <div className="w-1/4 min-w-[150px] flex justify-end items-center gap-2">
+      {/* Volume Control */}
+      <div className="w-1/4 min-w-[180px] flex justify-end items-center gap-3">
         <button
           onClick={() => setIsMuted(!isMuted)}
-          className="text-gray-400 hover:text-white"
+          className="text-gray-400 hover:text-white transition-colors group/mute"
         >
           {isMuted || volume === 0 ? (
-            <VolumeX size={18} />
+            <VolumeX
+              size={18}
+              className="group-hover/mute:text-red-400 transition-colors"
+            />
           ) : (
-            <Volume2 size={18} />
+            <Volume2
+              size={18}
+              className="group-hover/mute:text-cyan-400 transition-colors"
+            />
           )}
         </button>
-        <div className="w-24 h-1 bg-gray-700 rounded-full relative group">
-          <div
-            className="absolute inset-y-0 left-0 bg-white rounded-full group-hover:bg-cyan-400 transition-colors"
-            style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
-          ></div>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.01}
+
+        <div className="flex items-center gap-3">
+          <div className="w-24 h-1.5 bg-white/10 rounded-full relative group/vol cursor-pointer">
+            {/* Visual Track */}
+            <div
+              className={`absolute inset-y-0 left-0 rounded-full shadow-[0_0_10px_rgba(6,182,212,0.3)] transition-all duration-150 ${
+                isMuted ? "bg-gray-600" : "bg-white group-hover/vol:bg-cyan-400"
+              }`}
+              style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
+            ></div>
+
+            {/* Hidden Input for interaction */}
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={isMuted ? 0 : volume}
+              onChange={(e) => {
+                setVolume(parseFloat(e.target.value));
+                setIsMuted(false);
+              }}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+            />
+          </div>
+
+          <VolumeInput
             value={isMuted ? 0 : volume}
-            onChange={(e) => {
-              setVolume(parseFloat(e.target.value));
+            onChange={(val) => {
+              setVolume(val);
               setIsMuted(false);
             }}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           />
         </div>
       </div>

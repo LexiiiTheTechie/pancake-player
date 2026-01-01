@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Music, Clock } from "lucide-react";
-import { Track } from "../types";
+import { invoke } from "@tauri-apps/api/core";
+import { Track, AudioFileInfo } from "../types";
 
 interface MetadataEditorModalProps {
   isOpen: boolean;
@@ -18,7 +19,9 @@ const MetadataEditorModal: React.FC<MetadataEditorModalProps> = ({
   const [artist, setArtist] = useState("");
   const [title, setTitle] = useState("");
   const [album, setAlbum] = useState("");
+  const [coverImage, setCoverImage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingImage, setIsLoadingImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -27,6 +30,22 @@ const MetadataEditorModal: React.FC<MetadataEditorModalProps> = ({
       setTitle(track.title || "");
       setAlbum(track.album || "");
       setError(null);
+      setCoverImage(null);
+
+      // Fetch full info (including image) only on demand
+      setIsLoadingImage(true);
+      invoke<AudioFileInfo>("get_audio_file_info", { filePath: track.path })
+        .then((info) => {
+          if (info.cover_image) {
+            setCoverImage(info.cover_image);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to fetch album art:", err);
+        })
+        .finally(() => {
+          setIsLoadingImage(false);
+        });
     }
   }, [isOpen, track]);
 
@@ -89,24 +108,50 @@ const MetadataEditorModal: React.FC<MetadataEditorModalProps> = ({
             )}
 
             <div className="space-y-5">
-              {/* Read-only fields */}
-              <div className="grid grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">
-                    Filename
-                  </label>
-                  <div className="bg-gray-800/50 border border-white/5 rounded-lg px-4 py-3 text-gray-500 text-sm font-mono truncate">
-                    {track.filename}
-                  </div>
+              <div className="flex flex-col md:flex-row gap-6 mb-8">
+                {/* Cover Art */}
+                <div className="w-full md:w-48 h-48 shrink-0 relative group">
+                  {isLoadingImage ? (
+                    <div className="w-full h-full bg-gray-800 rounded-xl flex items-center justify-center border border-white/5">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400"></div>
+                    </div>
+                  ) : coverImage ? (
+                    <img
+                      src={`data:image/jpeg;base64,${coverImage}`}
+                      alt="Album Art"
+                      className="w-full h-full object-cover rounded-xl shadow-lg border border-white/5"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gray-800 rounded-xl flex items-center justify-center border border-white/5 group-hover:bg-gray-750 transition-colors">
+                      <Music className="w-16 h-16 text-gray-700" />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-xl">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                          No Cover Art
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
-                    <Clock size={14} />
-                    Duration
-                  </label>
-                  <div className="bg-gray-800/50 border border-white/5 rounded-lg px-4 py-3 text-gray-500 text-sm font-mono">
-                    {formatDuration(track.duration)}
+                {/* Quick Info */}
+                <div className="flex-1 space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Filename
+                    </label>
+                    <div className="bg-gray-800/50 border border-white/5 rounded-lg px-4 py-3 text-gray-500 text-sm font-mono truncate">
+                      {track.filename}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                      <Clock size={14} />
+                      Duration
+                    </label>
+                    <div className="bg-gray-800/50 border border-white/5 rounded-lg px-4 py-3 text-gray-500 text-sm font-mono text-cyan-400/80">
+                      {formatDuration(track.duration)}
+                    </div>
                   </div>
                 </div>
               </div>

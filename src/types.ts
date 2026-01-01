@@ -44,6 +44,7 @@ export interface AudioFileInfo {
   artist: string | null;
   title: string | null;
   album: string | null;
+  cover_image?: string;
 }
 
 export type RepeatMode = "none" | "all" | "one";

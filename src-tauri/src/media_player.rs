@@ -1,10 +1,11 @@
 // src-tauri/src/media_player.rs
+use base64::{engine::general_purpose, Engine as _};
 use id3::TagLike;
 use std::fs::File;
 use std::path::Path;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::StandardTagKey;
-use symphonia::core::probe::Hint; // Import the trait for id3 methods
+use symphonia::core::probe::Hint;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Track {
@@ -26,49 +27,85 @@ fn clean_metadata_string(s: &str) -> String {
 }
 
 // Try to read metadata using id3 crate (for MP3 files)
-fn try_id3_metadata(path: &Path) -> (Option<String>, Option<String>, Option<String>, f64) {
+fn try_id3_metadata(
+    path: &Path,
+) -> (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    f64,
+    Option<String>,
+) {
     match id3::Tag::read_from_path(path) {
         Ok(tag) => {
             let artist = tag.artist().map(|s| clean_metadata_string(s));
             let title = tag.title().map(|s| clean_metadata_string(s));
             let album = tag.album().map(|s| clean_metadata_string(s));
 
+            // Extract cover image
+            let cover_image = tag
+                .pictures()
+                .next()
+                .map(|p| general_purpose::STANDARD.encode(&p.data));
+
             // Try to get duration from id3
             let duration = tag.duration().unwrap_or(0) as f64 / 1000.0;
 
             eprintln!(
-                "ID3 read - Artist: {:?}, Title: {:?}, Album: {:?}, Duration: {}",
-                artist, title, album, duration
+                "ID3 read - Artist: {:?}, Title: {:?}, Album: {:?}, Duration: {}, Has Image: {}",
+                artist,
+                title,
+                album,
+                duration,
+                cover_image.is_some()
             );
-            (artist, title, album, duration)
+            (artist, title, album, duration, cover_image)
         }
         Err(e) => {
             eprintln!("Failed to read ID3 tags: {}", e);
-            (None, None, None, 0.0)
+            (None, None, None, 0.0, None)
         }
     }
 }
 
 // Try to read metadata using mp4ameta crate (for M4A/MP4 files)
-fn try_mp4_metadata(path: &Path) -> (Option<String>, Option<String>, Option<String>, f64) {
+fn try_mp4_metadata(
+    path: &Path,
+) -> (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    f64,
+    Option<String>,
+) {
     match mp4ameta::Tag::read_from_path(path) {
         Ok(tag) => {
             let artist = tag.artist().map(|s| clean_metadata_string(s));
             let title = tag.title().map(|s| clean_metadata_string(s));
             let album = tag.album().map(|s| clean_metadata_string(s));
 
+            // Extract cover image
+            let cover_image = tag
+                .artworks()
+                .next()
+                .map(|art| general_purpose::STANDARD.encode(&art.data));
+
             // Try to get duration
             let duration = tag.duration().map(|d| d.as_secs_f64()).unwrap_or(0.0);
 
             eprintln!(
-                "MP4 read - Artist: {:?}, Title: {:?}, Album: {:?}, Duration: {}",
-                artist, title, album, duration
+                "MP4 read - Artist: {:?}, Title: {:?}, Album: {:?}, Duration: {}, Has Image: {}",
+                artist,
+                title,
+                album,
+                duration,
+                cover_image.is_some()
             );
-            (artist, title, album, duration)
+            (artist, title, album, duration, cover_image)
         }
         Err(e) => {
             eprintln!("Failed to read MP4 tags: {}", e);
-            (None, None, None, 0.0)
+            (None, None, None, 0.0, None)
         }
     }
 }
@@ -77,12 +114,18 @@ fn try_mp4_metadata(path: &Path) -> (Option<String>, Option<String>, Option<Stri
 fn try_symphonia_metadata(
     path: &Path,
     enable_gapless: bool,
-) -> (Option<String>, Option<String>, Option<String>, f64) {
+) -> (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    f64,
+    Option<String>,
+) {
     let source = match File::open(path) {
         Ok(file) => file,
         Err(e) => {
             eprintln!("Failed to open file: {}", e);
-            return (None, None, None, 0.0);
+            return (None, None, None, 0.0, None);
         }
     };
 
@@ -106,7 +149,7 @@ fn try_symphonia_metadata(
             Ok(probed) => probed,
             Err(e) => {
                 eprintln!("Failed to probe format: {}", e);
-                return (None, None, None, 0.0);
+                return (None, None, None, 0.0, None);
             }
         };
 
@@ -125,7 +168,7 @@ fn try_symphonia_metadata(
         }
     }
 
-    let (mut artist, mut title, mut album) = (None, None, None);
+    let (mut artist, mut title, mut album, mut cover_image) = (None, None, None, None);
 
     // Helper to extract from revision
     let extract = |rev: &symphonia::core::meta::MetadataRevision,
@@ -165,17 +208,30 @@ fn try_symphonia_metadata(
         }
     };
 
+    // Helper to extract visual (cover art)
+    let extract_visual = |rev: &symphonia::core::meta::MetadataRevision| -> Option<String> {
+        rev.visuals()
+            .first()
+            .map(|v| general_purpose::STANDARD.encode(&v.data))
+    };
+
     // Check probe metadata (if it exists)
     if let Some(mut metadata_queue) = probe_metadata.get() {
         if let Some(rev) = metadata_queue.current() {
             extract(rev, &mut artist, &mut title, &mut album);
+            if cover_image.is_none() {
+                cover_image = extract_visual(rev);
+            }
         }
 
         // Try all revisions from probe metadata
         if artist.is_none() || title.is_none() || album.is_none() {
             while let Some(rev) = metadata_queue.pop() {
                 extract(&rev, &mut artist, &mut title, &mut album);
-                if artist.is_some() && title.is_some() && album.is_some() {
+                if cover_image.is_none() {
+                    cover_image = extract_visual(&rev);
+                }
+                if artist.is_some() && title.is_some() && album.is_some() && cover_image.is_some() {
                     break;
                 }
             }
@@ -185,6 +241,9 @@ fn try_symphonia_metadata(
     // Check format metadata
     if let Some(rev) = format.metadata().current() {
         extract(rev, &mut artist, &mut title, &mut album);
+        if cover_image.is_none() {
+            cover_image = extract_visual(rev);
+        }
     }
 
     // Try all format metadata revisions if still missing
@@ -192,17 +251,24 @@ fn try_symphonia_metadata(
         let mut format_metadata = format.metadata();
         while let Some(rev) = format_metadata.pop() {
             extract(&rev, &mut artist, &mut title, &mut album);
-            if artist.is_some() && title.is_some() && album.is_some() {
+            if cover_image.is_none() {
+                cover_image = extract_visual(&rev);
+            }
+            if artist.is_some() && title.is_some() && album.is_some() && cover_image.is_some() {
                 break;
             }
         }
     }
 
     eprintln!(
-        "Symphonia read - Artist: {:?}, Title: {:?}, Album: {:?}, Duration: {}",
-        artist, title, album, duration
+        "Symphonia read - Artist: {:?}, Title: {:?}, Album: {:?}, Duration: {}, Has Image: {}",
+        artist,
+        title,
+        album,
+        duration,
+        cover_image.is_some()
     );
-    (artist, title, album, duration)
+    (artist, title, album, duration, cover_image)
 }
 
 #[tauri::command]
@@ -241,16 +307,21 @@ pub async fn get_audio_metadata(file_path: String, enable_gapless: bool) -> Resu
         };
 
         // Try different metadata readers based on file extension
-        let (mut artist, mut title, mut album, mut duration) = match extension.as_str() {
-            "mp3" => try_id3_metadata(path),
-            "m4a" | "mp4" | "aac" => try_mp4_metadata(path),
-            _ => (None, None, None, 0.0),
-        };
+        let (mut artist, mut title, mut album, mut duration, _) =
+            match extension.as_str() {
+                "mp3" => try_id3_metadata(path),
+                "m4a" | "mp4" | "aac" => try_mp4_metadata(path),
+                _ => (None, None, None, 0.0, None),
+            };
 
         // If specialized reader didn't work or for other formats, try Symphonia
-        if artist.is_none() || title.is_none() || album.is_none() || duration == 0.0 {
+        if artist.is_none()
+            || title.is_none()
+            || album.is_none()
+            || duration == 0.0
+        {
             eprintln!("Trying Symphonia as fallback...");
-            let (sym_artist, sym_title, sym_album, sym_duration) =
+            let (sym_artist, sym_title, sym_album, sym_duration, _) =
                 try_symphonia_metadata(path, safe_enable_gapless);
 
             if artist.is_none() {
@@ -432,6 +503,7 @@ pub struct AudioFileInfo {
     pub artist: Option<String>,
     pub title: Option<String>,
     pub album: Option<String>,
+    pub cover_image: Option<String>,
 }
 
 #[tauri::command]
@@ -493,15 +565,16 @@ pub async fn get_audio_file_info(file_path: String) -> Result<AudioFileInfo, Str
             .and_then(|s| s.to_str())
             .unwrap_or("")
             .to_lowercase();
-        let (mut artist, mut title, mut album, _) = match extension.as_str() {
+        let (mut artist, mut title, mut album, _, mut cover_image) = match extension.as_str() {
             "mp3" => try_id3_metadata(path),
             "m4a" | "mp4" | "aac" => try_mp4_metadata(path),
             _ => try_symphonia_metadata(path, false),
         };
 
         // Fallback to symphonia if specific readers failed
-        if artist.is_none() || title.is_none() || album.is_none() {
-            let (sym_artist, sym_title, sym_album, _) = try_symphonia_metadata(path, false);
+        if artist.is_none() || title.is_none() || album.is_none() || cover_image.is_none() {
+            let (sym_artist, sym_title, sym_album, _, sym_cover) =
+                try_symphonia_metadata(path, false);
             if artist.is_none() {
                 artist = sym_artist;
             }
@@ -510,6 +583,9 @@ pub async fn get_audio_file_info(file_path: String) -> Result<AudioFileInfo, Str
             }
             if album.is_none() {
                 album = sym_album;
+            }
+            if cover_image.is_none() {
+                cover_image = sym_cover;
             }
         }
 
@@ -527,6 +603,7 @@ pub async fn get_audio_file_info(file_path: String) -> Result<AudioFileInfo, Str
             artist,
             title,
             album,
+            cover_image,
         })
     })
     .await;

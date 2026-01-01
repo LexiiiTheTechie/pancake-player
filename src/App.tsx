@@ -1,9 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
-import { listen } from "@tauri-apps/api/event";
-import { register, unregisterAll } from "@tauri-apps/plugin-global-shortcut";
-// import { convertFileSrc } from "@tauri-apps/api/core";
 
 // Components
 import Home from "./components/Home";
@@ -15,223 +11,93 @@ import VisualizerView from "./components/VisualizerView";
 import DragDropOverlay from "./components/DragDropOverlay";
 import PlaylistDetailView from "./components/PlaylistDetailView";
 import TitleBar from "./components/TitleBar";
+import SettingsModal from "./components/SettingsModal";
 
-// Audio Engine
-import { AudioEngine } from "./audioEngine";
+// Contexts
+import { SettingsProvider, useSettings } from "./contexts/SettingsContext";
+
+// Hooks
+import { useQueue } from "./hooks/useQueue";
+import { useAudioPlayer } from "./hooks/useAudioPlayer";
+import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 
 // Types
-import { Track, RawMetadata, RepeatMode, Tab, VisualizerStyle } from "./types";
+import { Track, Tab, VisualizerStyle } from "./types";
 
-const MusicPlayer: React.FC = () => {
-  // Refs
-  const engineRef = useRef<AudioEngine | null>(null);
+const AppContent: React.FC = () => {
+  const { settings, currentStyle, setCurrentStyle } = useSettings();
 
-  // State
-  const [queue, setQueue] = useState<Track[]>([]);
-  const [currentTrackIndex, setCurrentTrackIndex] = useState<number | null>(
-    null
-  );
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(0.7);
-  const [isMuted, setIsMuted] = useState(false);
-  const [shuffle, setShuffle] = useState(false);
-  const [repeat, setRepeat] = useState<RepeatMode>("none");
-  const [, setIsLoading] = useState(false);
+  // --- UI State ---
   const [activeTab, setActiveTab] = useState<Tab>("home");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [visualizerStyle, setVisualizerStyle] =
-    useState<VisualizerStyle>("mirror");
-  const [isDragging, setIsDragging] = useState(false);
+
+  // Settings driven state
+  const { enableGapless } = settings.audio;
+
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [viewingPlaylist, setViewingPlaylist] = useState<string | null>(null);
-  const [showFps, setShowFps] = useState(false);
-  // Add gapless toggle state (default true, safety check handles large files)
-  const [enableGapless, setEnableGapless] = useState(true);
-  const [enableShake, setEnableShake] = useState(true); // Screen Shake toggle
-  // HMR Trigger: 3
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  const currentTrack =
-    currentTrackIndex !== null ? queue[currentTrackIndex] : null;
+  // --- Hook Integration ---
 
-  // --- Initialize Engine ---
+  // 1. Queue Logic
+  const {
+    queue,
+    setQueue,
+    currentTrack,
+    currentTrackIndex,
+    setCurrentTrackIndex,
+    shuffle,
+    setShuffle,
+    repeat,
+    setRepeat,
+    isDragging,
+    searchQuery,
+    setSearchQuery,
+    addFiles,
+    reorderQueue,
+    removeFromQueue,
+    updateTrackMetadata,
+    setupDragDrop,
+  } = useQueue({ enableGapless });
+
+  // 2. Audio Logic
+  const {
+    engineRef,
+    isPlaying,
+    setIsPlaying,
+    currentTime,
+    setCurrentTime,
+    duration,
+    volume,
+    setVolume,
+    isMuted,
+    setIsMuted,
+    playTrack,
+    playNext,
+    playPrevious,
+    togglePlayPause,
+    handleSeek,
+  } = useAudioPlayer({
+    queue,
+    currentTrackIndex,
+    setCurrentTrackIndex,
+    repeat,
+    shuffle,
+    enableGapless,
+  });
+
+  // 3. Shortcuts
+  useGlobalShortcuts({ playNext, playPrevious, togglePlayPause });
+
+  // 4. Drag & Drop Setup
   useEffect(() => {
-    engineRef.current = new AudioEngine();
+    const unlisten = setupDragDrop();
     return () => {
-      engineRef.current?.stop();
+      unlisten(); // Clean up listeners
     };
-  }, []);
+  }, [setupDragDrop]);
 
-  // --- Queue Management ---
-
-  const processPaths = useCallback(
-    async (paths: string[]) => {
-      const audioExtensions = [".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a"];
-      const validPaths = paths.filter((path) =>
-        audioExtensions.some((ext) => path.toLowerCase().endsWith(ext))
-      );
-
-      if (validPaths.length === 0) return;
-
-      setIsLoading(true);
-
-      // 1. Create initial track objects immediately so UI updates fast
-      const newTracks: Track[] = validPaths.map((path) => ({
-        id: `${Date.now()}-${Math.random()}`,
-        path,
-        filename: path.split(/[/\\]/).pop() || "Unknown",
-        duration: 0,
-        artist: "Loading...",
-        title:
-          path
-            .split(/[/\\]/)
-            .pop()
-            ?.replace(/\.[^/.]+$/, "") || "Unknown",
-        album: "Loading...",
-        metadataLoaded: false,
-      }));
-
-      // Add to queue immediately
-      setQueue((prev) => [...prev, ...newTracks]);
-
-      // 2. Fetch metadata in parallel batches to maximize throughput
-      // We process all of them in parallel, letting the OS/Rust backend handle the threading
-
-      const metadataPromises = newTracks.map(async (track) => {
-        try {
-          const metadata = await invoke<RawMetadata>("get_audio_metadata", {
-            filePath: track.path,
-            enableGapless: enableGapless,
-          });
-          return { trackId: track.id, metadata, success: true };
-        } catch (e) {
-          console.error(`Metadata error for ${track.path}:`, e);
-          return { trackId: track.id, success: false };
-        }
-      });
-
-      // Wait for all metadata to load
-      const results = await Promise.all(metadataPromises);
-
-      // 3. Update queue with all loaded metadata at once (batch update)
-      setQueue((prev) => {
-        const updates = new Map(results.map((r) => [r.trackId, r]));
-
-        return prev.map((t) => {
-          const update = updates.get(t.id);
-          if (update && update.success && update.metadata) {
-            return {
-              ...t,
-              metadataLoaded: true,
-              artist: update.metadata.artist || "Unknown Artist",
-              title: update.metadata.title || t.title,
-              album: update.metadata.album || "Unknown Album",
-              duration: update.metadata.duration || 0,
-            };
-          } else if (update && !update.success) {
-            return { ...t, metadataLoaded: true };
-          }
-          return t;
-        });
-      });
-
-      if (queue.length === 0 && newTracks.length > 0) {
-        setCurrentTrackIndex(0);
-        setIsPlaying(true);
-      }
-
-      setIsLoading(false);
-    },
-    [queue.length, enableGapless]
-  );
-
-  const addFiles = useCallback(async () => {
-    try {
-      const selectedPaths = await open({
-        multiple: true,
-        title: "Add Music Files",
-        filters: [
-          {
-            name: "Audio",
-            extensions: ["mp3", "wav", "ogg", "flac", "aac", "m4a"],
-          },
-        ],
-      });
-
-      if (!selectedPaths) return;
-
-      const paths = Array.isArray(selectedPaths)
-        ? selectedPaths
-        : [selectedPaths];
-      await processPaths(paths);
-    } catch (e) {
-      console.error(e);
-      setIsLoading(false);
-    }
-  }, [processPaths]);
-
-  const updateTrackMetadata = useCallback(
-    async (trackPath: string, artist: string, title: string, album: string) => {
-      try {
-        // Call backend to update metadata
-        await invoke("update_metadata", {
-          filePath: trackPath,
-          artist: artist || null,
-          title: title || null,
-          album: album || null,
-        });
-
-        // Update the track in the queue
-        setQueue((prev) =>
-          prev.map((t) => {
-            if (t.path === trackPath) {
-              return {
-                ...t,
-                artist: artist || "Unknown Artist",
-                title: title || "Unknown",
-                album: album || "Unknown Album",
-              };
-            }
-            return t;
-          })
-        );
-
-        return true;
-      } catch (error) {
-        console.error("Failed to update metadata:", error);
-        throw error;
-      }
-    },
-    []
-  );
-
-  // Drag & Drop Listeners
-  useEffect(() => {
-    const unlistenDrop = listen("tauri://drag-drop", (event) => {
-      setIsDragging(false);
-      const payload = event.payload as { paths: string[] };
-      if (payload.paths && payload.paths.length > 0) {
-        processPaths(payload.paths);
-      }
-    });
-
-    const unlistenEnter = listen("tauri://drag-enter", () => {
-      setIsDragging(true);
-    });
-
-    const unlistenLeave = listen("tauri://drag-leave", () => {
-      setIsDragging(false);
-    });
-
-    return () => {
-      unlistenDrop.then((f) => f());
-      unlistenEnter.then((f) => f());
-      unlistenLeave.then((f) => f());
-    };
-  }, [processPaths]);
-
-  // --- Playlist Management ---
+  // --- Playlist Logic (Still in App.tsx for now as it bridges UI and state) ---
 
   const handleSavePlaylist = async (name: string) => {
     try {
@@ -260,7 +126,6 @@ const MusicPlayer: React.FC = () => {
 
   const playPlaylist = async (name: string) => {
     try {
-      setIsLoading(true);
       // Stop current playback immediately and clear state
       if (engineRef.current) {
         engineRef.current.reset();
@@ -293,8 +158,6 @@ const MusicPlayer: React.FC = () => {
     } catch (e) {
       console.error("❌ Failed to load playlist:", e);
       alert("Failed to load playlist: " + e);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -302,338 +165,6 @@ const MusicPlayer: React.FC = () => {
     setViewingPlaylist(name);
     setActiveTab("playlist");
   };
-
-  // --- Playback Control ---
-
-  const playTrack = (index: number) => {
-    if (currentTrackIndex === index) {
-      // If clicking the same track, just toggle play/pause
-      togglePlayPause();
-    } else {
-      setCurrentTrackIndex(index);
-      setIsPlaying(true);
-    }
-  };
-
-  const togglePlayPause = () => {
-    if (!currentTrack && queue.length > 0) {
-      playTrack(0);
-    } else {
-      setIsPlaying((p) => !p);
-    }
-  };
-
-  const playNext = useCallback(() => {
-    if (queue.length === 0) return;
-    let nextIndex = 0;
-    if (shuffle) {
-      nextIndex = Math.floor(Math.random() * queue.length);
-    } else {
-      nextIndex =
-        currentTrackIndex === null || currentTrackIndex === queue.length - 1
-          ? 0
-          : currentTrackIndex + 1;
-    }
-    setCurrentTrackIndex(nextIndex);
-  }, [queue.length, currentTrackIndex, shuffle]);
-
-  const playPrevious = useCallback(() => {
-    if (queue.length === 0) return;
-    if (currentTime > 3) {
-      if (engineRef.current) engineRef.current.seek(0);
-      return;
-    }
-    const prevIndex =
-      !currentTrackIndex || currentTrackIndex === 0
-        ? queue.length - 1
-        : currentTrackIndex - 1;
-    setCurrentTrackIndex(prevIndex);
-  }, [queue.length, currentTrackIndex, currentTime]);
-
-  const handleSeek = (time: number) => {
-    setCurrentTime(time);
-    if (engineRef.current) engineRef.current.seek(time);
-  };
-
-  const reorderQueue = (oldIndex: number, newIndex: number) => {
-    setQueue((items) => {
-      const newQueue = [...items];
-      const [movedItem] = newQueue.splice(oldIndex, 1);
-      newQueue.splice(newIndex, 0, movedItem);
-      return newQueue;
-    });
-
-    if (currentTrackIndex !== null) {
-      if (currentTrackIndex === oldIndex) {
-        setCurrentTrackIndex(newIndex);
-      } else if (
-        currentTrackIndex > oldIndex &&
-        currentTrackIndex <= newIndex
-      ) {
-        setCurrentTrackIndex(currentTrackIndex - 1);
-      } else if (
-        currentTrackIndex < oldIndex &&
-        currentTrackIndex >= newIndex
-      ) {
-        setCurrentTrackIndex(currentTrackIndex + 1);
-      }
-    }
-  };
-
-  const removeFromQueue = (index: number) => {
-    setQueue((q) => q.filter((_, idx) => idx !== index));
-
-    // Update currentTrackIndex to prevent invalid references
-    if (currentTrackIndex !== null) {
-      if (index === currentTrackIndex) {
-        // Removing the currently playing track - stop playback
-        if (engineRef.current) {
-          engineRef.current.stop();
-        }
-        setIsPlaying(false);
-        // Move to next track if available, otherwise clear
-        if (queue.length > 1) {
-          setCurrentTrackIndex(index >= queue.length - 1 ? 0 : index);
-        } else {
-          setCurrentTrackIndex(null);
-        }
-      } else if (index < currentTrackIndex) {
-        // Removed a track before the current one - shift index down
-        setCurrentTrackIndex(currentTrackIndex - 1);
-      }
-      // If index > currentTrackIndex, no change needed
-    }
-  };
-
-  // --- Audio Engine Effects ---
-
-  // Handle Track Change
-  useEffect(() => {
-    const loadAndPlay = async () => {
-      const engine = engineRef.current;
-      if (!engine || !currentTrack) return;
-
-      // Check if engine is ALREADY playing this track (from internal auto-switch)
-      // We can infer this if the engine is playing and we didn't just manually change tracks
-      // A robust way is to check if the engine's current buffer matches what we expect,
-      // but since we don't expose that, we can trust the internal switch logic.
-
-      // If the engine successfully auto-switched, we don't need to do anything
-      // except update duration.
-
-      // Try to "claim" the preloaded track if it hasn't been claimed yet
-      const wasPreloaded = engine.playNext(currentTrack.path);
-
-      if (!wasPreloaded) {
-        // If playNext returned false, it means either:
-        // 1. There was no preloaded track
-        // 2. The preloaded track didn't match
-        // 3. OR (Crucially) The engine ALREADY switched to it internally!
-
-        // We need a way to know if we should load from scratch.
-        // For now, we'll assume if we are playing and the time is near 0, we might be good.
-        // But safer is to just force load if we aren't sure.
-
-        // To fix the "stutter" on auto-switch:
-        // When auto-switch happens, engine plays next track -> onEnded fires -> React sets new index -> this effect runs.
-        // Inside engine, `nextBuffer` is nullified after playing. So `playNext` returns false.
-        // So we fall through to here and RELOAD the track that is already playing!
-
-        // FIX: We need to know if the engine is already playing the correct file.
-        // We now use activeTrackPath to verify this definitively.
-        if (
-          engine.activeTrackPath === currentTrack.path &&
-          (engine.currentTime < 2.0 || isPlaying)
-        ) {
-          // Already playing the correct track (auto-switched).
-          // We add a small time check (< 2.0s) to ensure we don't accidentally
-          // match a track that was fully played and stopped, although activeTrackPath
-          // should handle most cases.
-          // Actually, activeTrackPath is sufficient if we trust the engine state.
-          console.log("🚀 Auto-switch detected, syncing state...");
-          if (isPlaying) engine.play();
-        } else {
-          try {
-            engine.stop();
-            const loaded = await engine.loadTrack(currentTrack.path);
-            if (loaded && isPlaying) engine.play();
-          } catch (e) {
-            console.error("Failed to load track:", e);
-            setIsPlaying(false);
-          }
-        }
-      }
-
-      if (currentTrack.duration > 0) {
-        setDuration(currentTrack.duration);
-      } else {
-        setDuration(engine.duration || 0);
-      }
-
-      // Set up onEnded callback
-      engine.setOnEnded(() => {
-        // Skip if we already did a pre-end gapless switch
-        if (gaplessSwitchedRef.current) {
-          console.log("🔇 onEnded skipped - already switched via gapless");
-          return;
-        }
-
-        if (repeat === "one") {
-          engine.seek(0);
-          engine.play();
-        } else {
-          playNext();
-        }
-      });
-    };
-
-    loadAndPlay();
-  }, [currentTrack]); // Intentionally not including isPlaying to avoid re-loading
-
-  // Handle Play/Pause
-  useEffect(() => {
-    const engine = engineRef.current;
-    if (!engine) return;
-
-    if (isPlaying) {
-      engine.play();
-    } else {
-      engine.pause();
-    }
-  }, [isPlaying]);
-
-  // Handle Volume/Mute
-  useEffect(() => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    engine.setVolume(volume);
-    engine.setMute(isMuted);
-  }, [volume, isMuted]);
-
-  // Preload Next Track
-  useEffect(() => {
-    const engine = engineRef.current;
-    if (!engine || queue.length === 0 || currentTrackIndex === null) return;
-
-    let nextIndex = currentTrackIndex + 1;
-    if (nextIndex >= queue.length) {
-      if (repeat === "all") nextIndex = 0;
-      else return;
-    }
-
-    const nextTrack = queue[nextIndex];
-    if (nextTrack) {
-      engine.preloadNextTrack(nextTrack.path);
-    }
-  }, [queue, currentTrackIndex, repeat]);
-
-  // Time Update Polling & Pre-End Gapless Trigger
-  const gaplessSwitchedRef = useRef(false);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (engineRef.current && isPlaying) {
-        const engine = engineRef.current;
-        setCurrentTime(engine.currentTime);
-
-        // Pre-end gapless check (trigger switch ~100ms before end)
-        const timeUntilEnd = engine.getTimeUntilEnd();
-        if (
-          timeUntilEnd <= 0.15 &&
-          timeUntilEnd > 0 &&
-          !gaplessSwitchedRef.current
-        ) {
-          // Time to switch!
-          if (repeat !== "one" && engine.startNextTrackNow()) {
-            gaplessSwitchedRef.current = true;
-
-            // Update React state to match
-            let nextIndex = (currentTrackIndex ?? 0) + 1;
-            if (nextIndex >= queue.length) {
-              if (repeat === "all") nextIndex = 0;
-              // else: let it end naturally
-            }
-            if (nextIndex < queue.length) {
-              setCurrentTrackIndex(nextIndex);
-            }
-          }
-        } else if (timeUntilEnd > 0.5) {
-          // Reset switch flag when we're safely into a track
-          gaplessSwitchedRef.current = false;
-        }
-
-        // Also update duration if it wasn't valid initially or is different (e.g. VBR)
-        if (engine.duration > 0 && Math.abs(engine.duration - duration) > 1) {
-          setDuration(engine.duration);
-        }
-      }
-    }, 50); // Faster polling for tighter gapless (50ms instead of 100ms)
-    return () => clearInterval(interval);
-  }, [isPlaying, duration, currentTrackIndex, queue.length, repeat]);
-
-  // Keyboard
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
-
-      if (e.code === "Space") {
-        e.preventDefault();
-        togglePlayPause();
-      } else if (e.code === "ArrowRight") playNext();
-      else if (e.code === "ArrowLeft") playPrevious();
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [togglePlayPause, playNext, playPrevious]);
-
-  // --- Global Shortcuts ---
-  const handlersRef = useRef({
-    playNext,
-    playPrevious,
-    togglePlayPause,
-  });
-
-  useEffect(() => {
-    handlersRef.current = {
-      playNext,
-      playPrevious,
-      togglePlayPause,
-    };
-  }, [playNext, playPrevious, togglePlayPause]);
-
-  useEffect(() => {
-    const setupShortcuts = async () => {
-      try {
-        await unregisterAll();
-
-        await register("MediaPlayPause", (event) => {
-          if (event.state === "Pressed") {
-            handlersRef.current.togglePlayPause();
-          }
-        });
-        await register("MediaTrackNext", (event) => {
-          if (event.state === "Pressed") {
-            handlersRef.current.playNext();
-          }
-        });
-        await register("MediaTrackPrevious", (event) => {
-          if (event.state === "Pressed") {
-            handlersRef.current.playPrevious();
-          }
-        });
-        console.log("Global shortcuts registered");
-      } catch (error) {
-        console.error("Failed to register global shortcuts:", error);
-      }
-    };
-
-    setupShortcuts();
-
-    return () => {
-      unregisterAll();
-    };
-  }, []);
 
   return (
     <div className="h-screen w-screen bg-gray-950 text-white flex flex-col overflow-hidden selection:bg-cyan-500/30 pt-8">
@@ -645,16 +176,11 @@ const MusicPlayer: React.FC = () => {
         setSearchQuery={setSearchQuery}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        visualizerStyle={visualizerStyle}
-        setVisualizerStyle={setVisualizerStyle}
+        visualizerStyle={currentStyle}
+        setVisualizerStyle={setCurrentStyle}
         addFiles={addFiles}
         onVisualizerClick={() => {}}
-        showFps={showFps}
-        setShowFps={setShowFps}
-        enableGapless={enableGapless}
-        setEnableGapless={setEnableGapless}
-        enableShake={enableShake}
-        setEnableShake={setEnableShake}
+        onSettingsClick={() => setIsSettingsOpen(true)}
       />
 
       {/* Main Content */}
@@ -668,11 +194,9 @@ const MusicPlayer: React.FC = () => {
           <VisualizerView
             analyser={engineRef.current?.analyserNode || null}
             channels={engineRef.current?.channels}
-            visualizerStyle={visualizerStyle}
+            visualizerStyle={currentStyle}
             currentTrack={currentTrack}
             isPlaying={isPlaying}
-            showFps={showFps}
-            enableShake={enableShake}
           />
         </div>
 
@@ -725,6 +249,12 @@ const MusicPlayer: React.FC = () => {
             updateTrackMetadata={updateTrackMetadata}
           />
         </div>
+
+        {/* Sidebar Settings */}
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+        />
       </div>
 
       {/* Player Bar */}
@@ -758,6 +288,14 @@ const MusicPlayer: React.FC = () => {
         onSave={handleSavePlaylist}
       />
     </div>
+  );
+};
+
+const MusicPlayer: React.FC = () => {
+  return (
+    <SettingsProvider>
+      <AppContent />
+    </SettingsProvider>
   );
 };
 

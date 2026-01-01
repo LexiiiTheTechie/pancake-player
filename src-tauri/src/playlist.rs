@@ -22,6 +22,17 @@ fn get_playlist_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(playlist_dir)
 }
 
+fn get_playlist_path(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
+    let dir = get_playlist_dir(app)?;
+    Ok(dir.join(format!("{}.json", name)))
+}
+
+fn save_playlist_to_disk(path: &PathBuf, playlist: &Playlist) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(playlist).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn save_playlist(
     app: AppHandle,
@@ -30,28 +41,21 @@ pub fn save_playlist(
     cover_image: Option<String>,
 ) -> Result<(), String> {
     println!("Saving playlist: {}, cover_image: {:?}", name, cover_image);
-    let dir = get_playlist_dir(&app)?;
-    let file_path = dir.join(format!("{}.json", name));
-
-    // If the file exists, try to preserve existing fields if not provided?
-    // For now, we assume the frontend sends the complete state.
+    let file_path = get_playlist_path(&app, &name)?;
 
     let playlist = Playlist {
-        name: name.clone(),
+        name,
         tracks,
         cover_image,
     };
 
-    let json = serde_json::to_string_pretty(&playlist).map_err(|e| e.to_string())?;
-    fs::write(file_path, json).map_err(|e| e.to_string())?;
-
+    save_playlist_to_disk(&file_path, &playlist)?;
     Ok(())
 }
 
 #[tauri::command]
 pub fn load_playlist(app: AppHandle, name: String) -> Result<Playlist, String> {
-    let dir = get_playlist_dir(&app)?;
-    let file_path = dir.join(format!("{}.json", name));
+    let file_path = get_playlist_path(&app, &name)?;
 
     if !file_path.exists() {
         return Err("Playlist not found".to_string());
@@ -104,8 +108,7 @@ pub fn get_playlists(app: AppHandle) -> Result<Vec<PlaylistSummary>, String> {
 
 #[tauri::command]
 pub fn delete_playlist(app: AppHandle, name: String) -> Result<(), String> {
-    let dir = get_playlist_dir(&app)?;
-    let file_path = dir.join(format!("{}.json", name));
+    let file_path = get_playlist_path(&app, &name)?;
 
     if file_path.exists() {
         fs::remove_file(file_path).map_err(|e| e.to_string())?;
@@ -117,9 +120,8 @@ pub fn delete_playlist(app: AppHandle, name: String) -> Result<(), String> {
 #[tauri::command]
 pub fn rename_playlist(app: AppHandle, old_name: String, new_name: String) -> Result<(), String> {
     println!("Renaming playlist from {} to {}", old_name, new_name);
-    let dir = get_playlist_dir(&app)?;
-    let old_path = dir.join(format!("{}.json", old_name));
-    let new_path = dir.join(format!("{}.json", new_name));
+    let old_path = get_playlist_path(&app, &old_name)?;
+    let new_path = get_playlist_path(&app, &new_name)?;
 
     if !old_path.exists() {
         return Err("Playlist not found".to_string());
@@ -133,8 +135,7 @@ pub fn rename_playlist(app: AppHandle, old_name: String, new_name: String) -> Re
     let mut playlist: Playlist = serde_json::from_str(&json).map_err(|e| e.to_string())?;
     playlist.name = new_name;
 
-    let new_json = serde_json::to_string_pretty(&playlist).map_err(|e| e.to_string())?;
-    fs::write(&new_path, new_json).map_err(|e| e.to_string())?;
+    save_playlist_to_disk(&new_path, &playlist)?;
     fs::remove_file(&old_path).map_err(|e| e.to_string())?;
 
     Ok(())
