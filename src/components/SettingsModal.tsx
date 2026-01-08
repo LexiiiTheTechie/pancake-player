@@ -8,6 +8,7 @@ import {
   RotateCcw,
   Info,
   Sparkles,
+  Activity,
 } from "lucide-react";
 import { useSettings, AppSettings } from "../contexts/SettingsContext";
 
@@ -87,9 +88,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     currentStyle,
   } = useSettings();
   const modalRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = React.useState<"visual" | "perf" | "audio">(
-    "visual"
-  );
+  const [activeTab, setActiveTab] = React.useState<
+    "visual" | "surround" | "perf" | "audio" | "presence"
+  >("visual");
 
   // Animation State
   const [isRendered, setIsRendered] = useState(isOpen);
@@ -380,6 +381,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
               Visualizer
             </button>
             <button
+              onClick={() => setActiveTab("surround")}
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                activeTab === "surround"
+                  ? "bg-emerald-500/10 text-emerald-400"
+                  : "text-gray-400 hover:bg-white/5 hover:text-gray-200"
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              Surround
+            </button>
+            <button
+              onClick={() => setActiveTab("presence")}
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                activeTab === "presence"
+                  ? "bg-blue-500/10 text-blue-400"
+                  : "text-gray-400 hover:bg-white/5 hover:text-gray-200"
+              }`}
+            >
+              <Activity className="w-4 h-4" />
+              Presence
+            </button>
+            <button
               onClick={() => setActiveTab("perf")}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === "perf"
@@ -505,7 +528,27 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                             updatePerVisualizerSettings("surround", newVals),
                           currentStyle === "surround",
                           true,
-                          "Rec: 100% Sensitivity & 85% Smoothing (Organic & Immersive)"
+                          "Rec: 108% Sensitivity & 0% Smoothing (Snappy & Reactive)"
+                        )}
+                        {renderVisualizerSection(
+                          "Eclipse Visualizer",
+                          <Aperture className="w-4 h-4 text-cyan-400" />,
+                          settings.visualizer.perVisualizer.eclipse,
+                          (newVals) =>
+                            updatePerVisualizerSettings("eclipse", newVals),
+                          currentStyle === "eclipse",
+                          true,
+                          "Rec: 120% Sensitivity & 80% Smoothing"
+                        )}
+                        {renderVisualizerSection(
+                          "Shatter Visualizer",
+                          <Sparkles className="w-4 h-4 text-pink-400" />,
+                          settings.visualizer.perVisualizer.shatter,
+                          (newVals) =>
+                            updatePerVisualizerSettings("shatter", newVals),
+                          currentStyle === "shatter",
+                          true,
+                          "Rec: 110% Sensitivity & 70% Smoothing"
                         )}
                       </>
                     )}
@@ -591,6 +634,297 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     </div>
                   </div>
                   <ResetButton category="visualizer" onReset={resetCategory} />
+                </section>
+              </div>
+            )}
+
+            {activeTab === "surround" && (
+              <div className="space-y-8 animate-tab-in">
+                <section>
+                  <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                      <Sparkles className="w-6 h-6 text-emerald-400" />
+                      Surround Fidelity
+                    </h3>
+                  </div>
+
+                  <div className="space-y-8">
+                    {/* Chromatic Aberration */}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <label className="text-gray-300 text-xs font-semibold">
+                          Chromatic Aberration
+                        </label>
+                        <SettingInput
+                          value={Math.round(
+                            (settings.visualizer.perVisualizer.surround
+                              .chromaticAberration ?? 1) * 100
+                          )}
+                          min={0}
+                          max={200}
+                          onChange={(val) =>
+                            updatePerVisualizerSettings("surround", {
+                              chromaticAberration: val / 100,
+                            })
+                          }
+                        />
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={
+                          settings.visualizer.perVisualizer.surround
+                            .chromaticAberration ?? 1
+                        }
+                        onChange={(e) =>
+                          updatePerVisualizerSettings("surround", {
+                            chromaticAberration: parseFloat(e.target.value),
+                          })
+                        }
+                        className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                      />
+                    </div>
+
+                    {/* Ripple Intensity */}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <label className="text-gray-300 text-xs font-semibold">
+                          High-Frequency Ripples
+                        </label>
+                        <SettingInput
+                          value={Math.round(
+                            (settings.visualizer.perVisualizer.surround
+                              .rippleIntensity ?? 1) * 100
+                          )}
+                          min={0}
+                          max={200}
+                          onChange={(val) =>
+                            updatePerVisualizerSettings("surround", {
+                              rippleIntensity: val / 100,
+                            })
+                          }
+                        />
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={
+                          settings.visualizer.perVisualizer.surround
+                            .rippleIntensity ?? 1
+                        }
+                        onChange={(e) =>
+                          updatePerVisualizerSettings("surround", {
+                            rippleIntensity: parseFloat(e.target.value),
+                          })
+                        }
+                        className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                      />
+                    </div>
+
+                    {/* LFE Core Size */}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <label className="text-gray-300 text-xs font-semibold">
+                          LFE Solid Core Size
+                        </label>
+                        <SettingInput
+                          value={Math.round(
+                            (settings.visualizer.perVisualizer.surround
+                              .lfeCoreSize ?? 0.5) * 100
+                          )}
+                          min={10}
+                          max={100}
+                          onChange={(val) =>
+                            updatePerVisualizerSettings("surround", {
+                              lfeCoreSize: val / 100,
+                            })
+                          }
+                        />
+                      </div>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="1.0"
+                        step="0.05"
+                        value={
+                          settings.visualizer.perVisualizer.surround
+                            .lfeCoreSize ?? 0.5
+                        }
+                        onChange={(e) =>
+                          updatePerVisualizerSettings("surround", {
+                            lfeCoreSize: parseFloat(e.target.value),
+                          })
+                        }
+                        className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                      />
+                    </div>
+
+                    {/* Blast Wave Toggle */}
+                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
+                      <div className="space-y-1">
+                        <span className="text-gray-200 font-medium">
+                          Fidelity Blast Waves
+                        </span>
+                        <p className="text-xs text-gray-500">
+                          Radiate shockwaves on heavy bass peaks
+                        </p>
+                      </div>
+                      <button
+                        onClick={() =>
+                          updatePerVisualizerSettings("surround", {
+                            showBlastWave:
+                              !settings.visualizer.perVisualizer.surround
+                                .showBlastWave,
+                          })
+                        }
+                        className={`w-12 h-6 rounded-full relative transition-colors duration-200 ${
+                          settings.visualizer.perVisualizer.surround
+                            .showBlastWave
+                            ? "bg-emerald-500"
+                            : "bg-gray-700"
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all duration-200 ${
+                            settings.visualizer.perVisualizer.surround
+                              .showBlastWave
+                              ? "left-7"
+                              : "left-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Show Labels Toggle */}
+                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
+                      <div className="space-y-1">
+                        <span className="text-gray-200 font-medium">
+                          Show Speaker Labels
+                        </span>
+                        <p className="text-xs text-gray-500">
+                          Display C, L, R, Ls, Rs text on grid
+                        </p>
+                      </div>
+                      <button
+                        onClick={() =>
+                          updatePerVisualizerSettings("surround", {
+                            showLabels:
+                              !settings.visualizer.perVisualizer.surround
+                                .showLabels,
+                          })
+                        }
+                        className={`w-12 h-6 rounded-full relative transition-colors duration-200 ${
+                          settings.visualizer.perVisualizer.surround.showLabels
+                            ? "bg-emerald-500"
+                            : "bg-gray-700"
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all duration-200 ${
+                            settings.visualizer.perVisualizer.surround
+                              .showLabels
+                              ? "left-7"
+                              : "left-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Reactive RGB Toggle */}
+                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
+                      <div className="space-y-1">
+                        <span className="text-gray-200 font-medium">
+                          Reactive RGB Colors
+                        </span>
+                        <p className="text-xs text-gray-500">
+                          Cycle colors based on bass intensity
+                        </p>
+                      </div>
+                      <button
+                        onClick={() =>
+                          updatePerVisualizerSettings("surround", {
+                            useReactiveRGB:
+                              !settings.visualizer.perVisualizer.surround
+                                .useReactiveRGB,
+                          })
+                        }
+                        className={`w-12 h-6 rounded-full relative transition-colors duration-200 ${
+                          settings.visualizer.perVisualizer.surround
+                            .useReactiveRGB
+                            ? "bg-emerald-500"
+                            : "bg-gray-700"
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all duration-200 ${
+                            settings.visualizer.perVisualizer.surround
+                              .useReactiveRGB
+                              ? "left-7"
+                              : "left-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  <ResetButton category="visualizer" onReset={resetCategory} />
+                </section>
+              </div>
+            )}
+
+            {activeTab === "presence" && (
+              <div className="space-y-8 animate-tab-in">
+                <section>
+                  <h3 className="text-xl font-bold text-white mb-8 flex items-center gap-3">
+                    <Activity className="w-6 h-6 text-blue-400" />
+                    Social Presence
+                  </h3>
+
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between p-6 bg-white/5 rounded-2xl border border-white/5 shadow-xl">
+                      <div className="space-y-1.5">
+                        <span className="text-lg font-semibold text-white flex items-center gap-2">
+                          Discord Rich Presence
+                        </span>
+                        <p className="text-sm text-gray-400 leading-relaxed">
+                          Show your friends what you're listening to, including
+                          song titles, artists, and live timers.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() =>
+                          toggleSetting("presence", "enableRichPresence")
+                        }
+                        className={`w-14 h-7 rounded-full relative transition-all duration-300 shadow-inner ${
+                          settings.presence.enableRichPresence
+                            ? "bg-blue-500 shadow-blue-500/20"
+                            : "bg-gray-700"
+                        }`}
+                      >
+                        <div
+                          className={`w-5 h-5 bg-white rounded-full absolute top-1 transition-all duration-300 shadow-lg ${
+                            settings.presence.enableRichPresence
+                              ? "left-8"
+                              : "left-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl">
+                      <p className="text-xs text-blue-400/80 leading-relaxed">
+                        Note: For Rich Presence to work, you must have the
+                        Discord Desktop client open and "Activity Status"
+                        enabled in your Discord user settings.
+                      </p>
+                    </div>
+                  </div>
+
+                  <ResetButton category="presence" onReset={resetCategory} />
                 </section>
               </div>
             )}

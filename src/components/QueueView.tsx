@@ -30,6 +30,7 @@ interface QueueViewProps {
   isPlaying: boolean;
   playTrack: (index: number) => void;
   removeFromQueue: (index: number) => void;
+  clearQueue: () => void;
   reorderQueue: (oldIndex: number, newIndex: number) => void;
   openSaveModal: () => void;
   addFiles: () => void;
@@ -224,6 +225,7 @@ const QueueView: React.FC<QueueViewProps> = ({
   isPlaying,
   playTrack,
   removeFromQueue,
+  clearQueue,
   reorderQueue,
   openSaveModal,
   addFiles,
@@ -333,7 +335,13 @@ const QueueView: React.FC<QueueViewProps> = ({
         </div>
       ) : (
         <>
-          <div className="flex justify-end mb-4">
+          <div className="flex justify-end gap-3 mb-4">
+            <button
+              onClick={clearQueue}
+              className="flex items-center gap-2 text-sm font-medium text-red-500/80 hover:text-red-400 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-500/5"
+            >
+              <Trash2 size={16} /> Clear Queue
+            </button>
             <button
               onClick={openSaveModal}
               className="flex items-center gap-2 text-sm font-medium text-cyan-400 hover:text-cyan-300 transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5"

@@ -5,6 +5,8 @@ import { IVisualizerRenderer } from "../visualizers/IVisualizerRenderer";
 import { StandardRenderer } from "../visualizers/StandardRenderer";
 import { MirrorRenderer } from "../visualizers/MirrorRenderer";
 import { SurroundRenderer } from "../visualizers/SurroundRenderer";
+import { EclipseRenderer } from "../visualizers/EclipseRenderer";
+import { ShatterRenderer } from "../visualizers/ShatterRenderer";
 import { useSettings } from "../contexts/SettingsContext";
 
 interface VisualizerViewProps {
@@ -48,16 +50,24 @@ const VisualizerView: React.FC<VisualizerViewProps> = ({
     }
   }, [settings, visualizerSettings, analyser]);
 
-  // --- Initialize Renderers ---
-  // We memorize them so state (like smooth energy) persists across re-renders
-  const renderers = useMemo<Record<VisualizerStyle, IVisualizerRenderer>>(
-    () => ({
-      standard: new StandardRenderer(),
-      mirror: new MirrorRenderer(),
-      surround: new SurroundRenderer(),
-    }),
-    []
-  );
+  // --- Initialize Renderer ---
+  // We recreate the renderer whenever the style changes to reset its internal state (animations, etc.)
+  const renderer = useMemo<IVisualizerRenderer | null>(() => {
+    switch (visualizerStyle) {
+      case "standard":
+        return new StandardRenderer();
+      case "mirror":
+        return new MirrorRenderer();
+      case "surround":
+        return new SurroundRenderer();
+      case "eclipse":
+        return new EclipseRenderer();
+      case "shatter":
+        return new ShatterRenderer();
+      default:
+        return null;
+    }
+  }, [visualizerStyle]);
 
   const drawVisualizer = useCallback(() => {
     const canvas = canvasRef.current;
@@ -110,7 +120,6 @@ const VisualizerView: React.FC<VisualizerViewProps> = ({
         containerRef.current.style.transform = "none";
       }
 
-      const renderer = renderers[visualizerStyle];
       if (renderer) {
         // Create a "patched" settings object with effective visualizer values
         const effectiveSettings = {
@@ -121,26 +130,30 @@ const VisualizerView: React.FC<VisualizerViewProps> = ({
           },
         };
 
-        renderer.draw(
-          ctx,
-          analyser,
-          dataArray,
-          { width, height, dpr },
-          {
-            channels,
-            enableShake: visualizerSettingsRef.current.enableShake,
-            settings: effectiveSettings, // Pass patched settings
-            onShake: (dx: number, dy: number, rot: number) => {
-              if (containerRef.current) {
-                if (dx === 0 && dy === 0 && rot === 0) {
-                  containerRef.current.style.transform = "none";
-                } else {
-                  containerRef.current.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
+        try {
+          renderer.draw(
+            ctx,
+            analyser,
+            dataArray,
+            { width, height, dpr },
+            {
+              channels: channels || [],
+              enableShake: visualizerSettingsRef.current.enableShake,
+              settings: effectiveSettings, // Pass patched settings
+              onShake: (dx, dy, rot) => {
+                if (containerRef.current) {
+                  if (dx === 0 && dy === 0 && rot === 0) {
+                    containerRef.current.style.transform = "none";
+                  } else {
+                    containerRef.current.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
+                  }
                 }
-              }
-            },
-          }
-        );
+              },
+            }
+          );
+        } catch (e) {
+          console.error(e);
+        }
       } else {
         // Fallback if somehow style is invalid, reset transform
         if (containerRef.current) {
@@ -150,7 +163,7 @@ const VisualizerView: React.FC<VisualizerViewProps> = ({
     };
 
     draw();
-  }, [analyser, visualizerStyle, isPlaying, renderers, channels]); // Added channels dependency
+  }, [analyser, visualizerStyle, isPlaying, renderer, channels]);
 
   // Start/Stop animation loop
   useEffect(() => {
@@ -161,6 +174,87 @@ const VisualizerView: React.FC<VisualizerViewProps> = ({
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
+
+      // Draw Inactive Frame (Zero Energy)
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d");
+      if (canvas && ctx) {
+        // Instantiate a fresh renderer to ensure no smoothing state persists (force zero state)
+        let renderer = null;
+        switch (visualizerStyle) {
+          case "standard":
+            renderer = new StandardRenderer();
+            break;
+          case "mirror":
+            renderer = new MirrorRenderer();
+            break;
+          case "surround":
+            renderer = new SurroundRenderer();
+            break;
+          case "eclipse":
+            renderer = new EclipseRenderer();
+            break;
+          case "shatter":
+            renderer = new ShatterRenderer();
+            break;
+        }
+
+        if (renderer) {
+          // Clear and Reset
+          const width = canvas.width;
+          const height = canvas.height;
+          const dpr =
+            settingsRef.current.visualizer.resolution === "native"
+              ? window.devicePixelRatio || 1
+              : 1;
+
+          ctx.clearRect(0, 0, width, height);
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          if (containerRef.current)
+            containerRef.current.style.transform = "none";
+
+          // Force use of a Mock Analyser to ensure we draw a purely "idle" state
+          // We ignore the real analyser to prevent accessing the AudioContext while it might be suspending,
+          // and to guarantee the renderer receives exactly zeroed data for the idle look.
+          const mockAnalyser = {
+            frequencyBinCount: analyser ? analyser.frequencyBinCount : 2048,
+            getByteFrequencyData: (arr: Uint8Array) => {
+              // Explicitly zero out the data to guarantee idle state
+              arr.fill(0);
+            },
+          } as AnalyserNode;
+
+          // Draw with Zero Data
+          const zeroData = new Uint8Array(mockAnalyser.frequencyBinCount);
+          mockAnalyser.getByteFrequencyData(zeroData); // Ensure it's zeroed
+
+          const effectiveSettings = {
+            ...settingsRef.current,
+            visualizer: {
+              ...settingsRef.current.visualizer,
+              ...visualizerSettingsRef.current,
+            },
+          };
+
+          try {
+            renderer.draw(
+              ctx,
+              mockAnalyser,
+              zeroData,
+              { width, height, dpr },
+              {
+                channels: [], // Force empty channels to use zeroData
+                enableShake: false,
+                settings: effectiveSettings,
+                onShake: () => {},
+              }
+            );
+            console.log("Visualizer: Drew inactive frame");
+          } catch (e) {
+            console.error("Visualizer: Failed to draw inactive frame", e);
+          }
+        }
+      }
     }
     return () => {
       if (animationFrameRef.current) {
@@ -168,7 +262,7 @@ const VisualizerView: React.FC<VisualizerViewProps> = ({
         animationFrameRef.current = null;
       }
     };
-  }, [isPlaying, analyser, drawVisualizer]);
+  }, [isPlaying, analyser, drawVisualizer, visualizerStyle, channels]);
 
   // Canvas Resize
   useEffect(() => {
@@ -220,6 +314,8 @@ const VisualizerView: React.FC<VisualizerViewProps> = ({
           ${
             visualizerStyle === "mirror" || visualizerStyle === "surround"
               ? "top-[calc(100%-8rem)]"
+              : visualizerStyle === "eclipse"
+              ? "top-12"
               : "top-24"
           }
         `}

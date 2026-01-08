@@ -12,6 +12,8 @@ fn test_command() -> String {
 pub mod media_player;
 pub mod playlist;
 
+use tauri::Manager;
+
 // Re-export the commands
 pub use media_player::{check_file_exists, get_audio_metadata, update_metadata};
 
@@ -22,6 +24,49 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_shell::init())
+        .setup(|app| {
+            use std::sync::Mutex;
+            use tauri_plugin_shell::ShellExt;
+
+            // Launch the discord-bridge sidecar automatically
+            let sidecar_command = app.shell().sidecar("discord-bridge");
+            match sidecar_command {
+                Ok(cmd) => {
+                    match cmd.spawn() {
+                        Ok(child) => {
+                            // Store the child process so we can kill it later
+                            app.manage(Mutex::new(Some(child)));
+                            println!("✅ Sidecar: Discord Presence Bridge started.");
+                        }
+                        Err(e) => {
+                            println!("❌ Sidecar: Failed to spawn: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("❌ Sidecar: Failed to create command: {}", e);
+                }
+            }
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            use std::sync::Mutex;
+            use tauri::WindowEvent;
+            use tauri_plugin_shell::process::CommandChild;
+
+            if let WindowEvent::Destroyed = event {
+                // Kill the sidecar when the window closes
+                if let Some(state) = window.try_state::<Mutex<Option<CommandChild>>>() {
+                    if let Ok(mut guard) = state.try_lock() {
+                        if let Some(child) = guard.take() {
+                            let _ = child.kill();
+                            println!("🛑 Sidecar: Discord bridge terminated.");
+                        }
+                    }
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             greet,
             test_command,
@@ -33,7 +78,7 @@ pub fn run() {
             playlist::load_playlist,
             playlist::get_playlists,
             playlist::delete_playlist,
-            playlist::rename_playlist
+            playlist::rename_playlist,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 // Components
@@ -20,9 +20,10 @@ import { SettingsProvider, useSettings } from "./contexts/SettingsContext";
 import { useQueue } from "./hooks/useQueue";
 import { useAudioPlayer } from "./hooks/useAudioPlayer";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 
 // Types
-import { Track, Tab, VisualizerStyle } from "./types";
+import { Track, Tab } from "./types";
 
 const AppContent: React.FC = () => {
   const { settings, currentStyle, setCurrentStyle } = useSettings();
@@ -56,6 +57,7 @@ const AppContent: React.FC = () => {
     addFiles,
     reorderQueue,
     removeFromQueue,
+    clearQueue,
     updateTrackMetadata,
     setupDragDrop,
   } = useQueue({ enableGapless });
@@ -77,6 +79,7 @@ const AppContent: React.FC = () => {
     playPrevious,
     togglePlayPause,
     handleSeek,
+    seekBy,
   } = useAudioPlayer({
     queue,
     currentTrackIndex,
@@ -86,8 +89,17 @@ const AppContent: React.FC = () => {
     enableGapless,
   });
 
+  const handleClearQueue = useCallback(() => {
+    if (engineRef.current) {
+      engineRef.current.reset();
+    }
+    setIsPlaying(false);
+    clearQueue();
+  }, [clearQueue, setIsPlaying, engineRef]);
+
   // 3. Shortcuts
   useGlobalShortcuts({ playNext, playPrevious, togglePlayPause });
+  useKeyboardShortcuts({ playNext, playPrevious, togglePlayPause, seekBy });
 
   // 4. Drag & Drop Setup
   useEffect(() => {
@@ -96,6 +108,46 @@ const AppContent: React.FC = () => {
       unlisten(); // Clean up listeners
     };
   }, [setupDragDrop]);
+
+  // 5. Discord Rich Presence via Node.js Bridge
+  useEffect(() => {
+    const updatePresence = async () => {
+      console.log("🎵 Discord Presence Update:", {
+        enabled: settings.presence.enableRichPresence,
+        track: currentTrack?.title,
+        index: currentTrackIndex,
+        isPlaying,
+      });
+
+      try {
+        if (settings.presence.enableRichPresence && currentTrack) {
+          await fetch("http://127.0.0.1:33333", {
+            method: "POST",
+            body: JSON.stringify({
+              title: currentTrack.title,
+              artist: currentTrack.artist,
+              isPlaying: isPlaying,
+              startTime: Math.floor(Date.now() / 1000),
+            }),
+          });
+        } else {
+          await fetch("http://127.0.0.1:33333", {
+            method: "POST",
+            body: JSON.stringify({ isPlaying: false, title: "" }),
+          });
+        }
+      } catch (err) {
+        // Silently fail if bridge isn't running
+      }
+    };
+
+    updatePresence();
+  }, [
+    currentTrack?.path,
+    currentTrackIndex,
+    isPlaying,
+    settings.presence.enableRichPresence,
+  ]);
 
   // --- Playlist Logic (Still in App.tsx for now as it bridges UI and state) ---
 
@@ -245,6 +297,7 @@ const AppContent: React.FC = () => {
             reorderQueue={reorderQueue}
             openSaveModal={openSaveModal}
             addFiles={addFiles}
+            clearQueue={handleClearQueue}
             searchQuery={searchQuery}
             updateTrackMetadata={updateTrackMetadata}
           />
@@ -272,6 +325,7 @@ const AppContent: React.FC = () => {
         duration={duration}
         setCurrentTime={setCurrentTime}
         onSeek={handleSeek}
+        onSeekBy={seekBy}
         volume={volume}
         setVolume={setVolume}
         isMuted={isMuted}

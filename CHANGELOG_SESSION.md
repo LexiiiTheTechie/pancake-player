@@ -1,30 +1,26 @@
-# Pancake Player - Update Summary
+### **Release v3 Notes**
 
-## 🛠️ Performance & Memory Optimizations
+This marks the 3rd release of **Pancake Player**.
+v3 focuses on precision control, high-performance metadata handling, and deeper customisation for the Surround visualiser.
 
-- **On-Demand Album Art Extraction**: Image data is no longer pre-extracted or stored in the global track queue. Artwork is now fetched lazily only when you open a Metadata or File Info window, keeping the app lean and fast for gapless playback.
-- **Deep Settings Merging**: Updated the settings provider to perform deep property merging, ensuring new feature settings (like channel gains) are automatically injected for existing users without losing their old configuration.
+### **Pancake Player v3 Updates:**
 
-## 🔊 Audio & Control Enhancements
+- **Precision Volume Input** - You can now click the volume percentage and type an exact value (0-100%). It includes smart validation and auto-commit on "Enter" for perfect volume accuracy.
+- **On-Demand Album Art** - High-quality artwork is now displayed in the Metadata Editor and File Info windows. This is intelligently fetched only when the modal is open, ensuring zero impact on pre-scanning and playback memory.
+- **Surround Channel Gains** - Added independent control over **Center Channel Gain** and **Subwoofer (LFE) Gain** in the Surround visualiser. Perfect for balancing vocals and bass impact.
+- **Smart Mode Confirmation** - Added a "Switch Mode?" confirmation dialog when toggling between Global and Individual visualiser settings to prevent accidental physics resets.
+- **Interactive Tuning Guides** - Added new tooltips and "Sparkle" recommendations for Sensitivity and Smoothing settings to help you find the best response for each visualiser style.
 
-- **Precision Volume Control**:
-  - Replaced the static percentage label with a **Click-to-Edit** input field (0-100%).
-  - Added support for `Enter` to commit changes and auto-clamping for values outside the safe range.
-  - Slimmed down the volume input UI for a tighter, professional look.
-- **Premium Slider Aesthetics**: Added glowing cyan tracks, better hover states for the mute button, and smooth transitions to the player bar.
-- **Surround Channel Tuning**:
-  - Added **Center Channel Gain** and **Subwoofer (LFE) Gain** sliders for the Surround visualizer.
-  - Allows independent control over vocal/lead clarity and bass impact without affecting side-channel physics.
+### **Pancake Player v3 Bug Fixes:**
 
-## 🎨 UI & UX Improvements
+- **Sticky Visualiser Shake** - Fixed a bug where the screen would remain tilted or "stuck" when switching away from the Surround visualiser or toggling Shake Mode.
+- **Settings Persistence** - Implemented deep property merging in the settings provider, so new tuning features are automatically added for existing users without resetting their library.
+- **Visualiser State Sync** - Resolved issues where reactivity and smoothing updates weren't applying instantly in certain modes.
 
-- **Album Art Integration**:
-  - Added high-quality album art display to the **Metadata Editor** and **File Info** windows.
-  - Implemented stylized placeholders and loading spinners for a polished "premium" feel.
-- **Toggle Confirmation**: Added a two-step confirmation dialog ("Switch Mode?") when toggling between Individual and Global visualizer settings to prevent accidental physics resets.
-- **Visualizer Instructions**: Integrated interactive tooltips (`Info` icon) and Sparkle recommendations for sensitivity and smoothing settings to help users find the "sweet spot" for each style.
+### **Notes**
 
-## 🐛 Bug Fixes
+Enjoy v3! This update makes the player feel much more professional and high-precision. I hope you all enjoy it :3
 
-- **Sticky Shake Fix**: Resolved an issue where the screen transform would "stick" and leave the window tilted after switching away from the Surround visualizer.
-- **Visualizer State Sync**: Ensured that sensitivity and reactivity updates are applied instantly across all rendering modes.
+Also, Happy New Year :3
+
+**Full Changelog**: https://github.com/LexiiiTheTechie/pancake-player/commits/v3

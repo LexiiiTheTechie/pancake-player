@@ -31,6 +31,22 @@ export const useAudioPlayer = ({
   const currentTrack =
     currentTrackIndex !== null ? queue[currentTrackIndex] : null;
 
+  // Use refs for callbacks to avoid stale closures in engine events/polling
+  const playNextRef = useRef<(isAuto?: boolean) => void>(() => {});
+  const playPreviousRef = useRef<() => void>(() => {});
+  const togglePlayPauseRef = useRef<() => void>(() => {});
+  const repeatRef = useRef(repeat);
+  const queueRef = useRef(queue);
+  const currentTrackIndexRef = useRef(currentTrackIndex);
+  const isPlayingRef = useRef(isPlaying);
+
+  useEffect(() => {
+    repeatRef.current = repeat;
+    queueRef.current = queue;
+    currentTrackIndexRef.current = currentTrackIndex;
+    isPlayingRef.current = isPlaying;
+  }, [repeat, queue, currentTrackIndex, isPlaying]);
+
   // Initialize Engine
   useEffect(() => {
     engineRef.current = new AudioEngine();
@@ -43,13 +59,19 @@ export const useAudioPlayer = ({
   const playTrack = useCallback(
     (index: number) => {
       if (currentTrackIndex === index) {
-        togglePlayPause();
+        // If same track, just make sure it's playing and maybe restart if paused
+        if (!isPlaying) {
+          setIsPlaying(true);
+        } else {
+          // Optional: restart track? For now just keep playing
+          if (engineRef.current) engineRef.current.seek(0);
+        }
       } else {
         setCurrentTrackIndex(index);
         setIsPlaying(true);
       }
     },
-    [currentTrackIndex, setCurrentTrackIndex] // Dependencies for closure
+    [currentTrackIndex, isPlaying, setCurrentTrackIndex]
   );
 
   const togglePlayPause = useCallback(() => {
@@ -60,37 +82,76 @@ export const useAudioPlayer = ({
     }
   }, [currentTrack, queue, playTrack]);
 
-  const playNext = useCallback(() => {
-    if (queue.length === 0) return;
-    let nextIndex = 0;
-    if (shuffle) {
-      nextIndex = Math.floor(Math.random() * queue.length);
-    } else {
-      nextIndex =
-        currentTrackIndex === null || currentTrackIndex === queue.length - 1
-          ? 0
-          : currentTrackIndex + 1;
-    }
-    setCurrentTrackIndex(nextIndex);
-  }, [queue.length, currentTrackIndex, shuffle, setCurrentTrackIndex]);
+  const playNext = useCallback(
+    (isAuto = false) => {
+      const q = queueRef.current;
+      const idx = currentTrackIndexRef.current;
+      const rep = repeatRef.current;
+
+      if (q.length === 0) return;
+
+      // If auto-advancing and we are at the end without repeat all, STOP.
+      if (isAuto && rep === "none" && idx === q.length - 1) {
+        setIsPlaying(false);
+        return;
+      }
+
+      let nextIndex = 0;
+      if (shuffle) {
+        if (q.length > 1) {
+          // Avoid playing the same track again if possible
+          do {
+            nextIndex = Math.floor(Math.random() * q.length);
+          } while (nextIndex === idx);
+        } else {
+          nextIndex = 0;
+        }
+      } else {
+        nextIndex = idx === null || idx === q.length - 1 ? 0 : idx + 1;
+      }
+      setCurrentTrackIndex(nextIndex);
+      setIsPlaying(true);
+    },
+    [shuffle, setCurrentTrackIndex]
+  );
 
   const playPrevious = useCallback(() => {
-    if (queue.length === 0) return;
+    const q = queueRef.current;
+    const idx = currentTrackIndexRef.current;
+
+    if (q.length === 0) return;
     if (currentTime > 3 && engineRef.current) {
       engineRef.current.seek(0);
       return;
     }
-    const prevIndex =
-      !currentTrackIndex || currentTrackIndex === 0
-        ? queue.length - 1
-        : currentTrackIndex - 1;
+    const prevIndex = !idx || idx === 0 ? q.length - 1 : idx - 1;
     setCurrentTrackIndex(prevIndex);
-  }, [queue.length, currentTrackIndex, currentTime, setCurrentTrackIndex]);
+    setIsPlaying(true);
+  }, [currentTime, setCurrentTrackIndex]);
+
+  useEffect(() => {
+    playNextRef.current = playNext;
+    playPreviousRef.current = playPrevious;
+    togglePlayPauseRef.current = togglePlayPause;
+  }, [playNext, playPrevious, togglePlayPause]);
 
   const handleSeek = (time: number) => {
     setCurrentTime(time);
     if (engineRef.current) engineRef.current.seek(time);
   };
+
+  const seekBy = useCallback(
+    (seconds: number) => {
+      const engine = engineRef.current;
+      if (!engine) return;
+      const newTime = Math.max(
+        0,
+        Math.min(engine.duration, engine.currentTime + seconds)
+      );
+      handleSeek(newTime);
+    },
+    [handleSeek]
+  );
 
   // --- Effects ---
 
@@ -115,17 +176,26 @@ export const useAudioPlayer = ({
     const engine = engineRef.current;
     if (!engine || queue.length === 0 || currentTrackIndex === null) return;
 
-    // Logic for finding next track matches playNext but simplified for preload
-    let nextIndex = currentTrackIndex + 1;
-    if (nextIndex >= queue.length) {
-      if (repeat === "all") nextIndex = 0;
-      else return;
+    let nextIndex;
+    if (shuffle) {
+      // In shuffle mode, we don't know the "next" index until we pick it.
+      // For now, let's not preload in shuffle or pick a random one if we want to be fancy.
+      // But a random pick might be different from what playNext() eventually picks.
+      // So gapless is harder with random shuffle without a lookahead queue.
+      return;
+    } else {
+      nextIndex = currentTrackIndex + 1;
+      if (nextIndex >= queue.length) {
+        if (repeat === "all") nextIndex = 0;
+        else return;
+      }
     }
+
     const nextTrack = queue[nextIndex];
     if (nextTrack) {
       engine.preloadNextTrack(nextTrack.path);
     }
-  }, [queue, currentTrackIndex, repeat]);
+  }, [queue, currentTrackIndex, repeat, shuffle]);
 
   // 4. Handle Track Change & Gapless Logic
   // Using a ref to track if we just did a gapless switch to avoid double-loading
@@ -165,21 +235,8 @@ export const useAudioPlayer = ({
           console.log("🔇 onEnded skipped - handled by gapless logic");
           return;
         }
-        if (repeat === "one") {
-          engine.seek(0);
-          engine.play();
-        } else {
-          // This call needs to trigger the state update in the PARENT
-          // effectively calling playNext() but we can't call the hook's playNext directly inside the hook's effect easily
-          // unless we're careful. We'll use the function passed in props or defined above.
-
-          // However, playNext changes state, which re-renders, which triggers this effect again.
-          // This is fine.
-
-          // WARNING: We need to break the cycle.
-          // We can just call the state setter directly or helper.
-          playNext();
-        }
+        // Auto-advance
+        playNextRef.current(true);
       });
     };
 
@@ -199,9 +256,9 @@ export const useAudioPlayer = ({
           timeUntilEnd > 0 &&
           !gaplessSwitchedRef.current
         ) {
-          if (repeat !== "one" && engine.startNextTrackNow()) {
+          if (repeatRef.current !== "one" && engine.startNextTrackNow()) {
             gaplessSwitchedRef.current = true;
-            playNext(); // Updates React state to match engine
+            playNextRef.current(true); // Updates React state to match engine
           }
         } else if (timeUntilEnd > 0.5) {
           gaplessSwitchedRef.current = false;
@@ -213,7 +270,7 @@ export const useAudioPlayer = ({
       }
     }, 50);
     return () => clearInterval(interval);
-  }, [isPlaying, duration, repeat, playNext]); // playNext dep is stable due to useCallback
+  }, [isPlaying, duration]); // Use refs inside for other values to avoid interval restarts
 
   return {
     engineRef,
@@ -231,5 +288,6 @@ export const useAudioPlayer = ({
     playPrevious,
     togglePlayPause,
     handleSeek,
+    seekBy,
   };
 };

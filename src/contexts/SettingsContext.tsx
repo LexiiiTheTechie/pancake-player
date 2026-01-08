@@ -22,12 +22,20 @@ const DEFAULT_SETTINGS = {
       standard: { sensitivity: 0.65, reactivity: 0.45, enableShake: true },
       mirror: { sensitivity: 0.9, reactivity: 0.6, enableShake: true },
       surround: {
-        sensitivity: 1.05,
+        sensitivity: 1.08,
         reactivity: 0,
         enableShake: true,
-        centerSensitivity: 1.1,
-        lfeSensitivity: 0.95,
+        centerSensitivity: 0.9,
+        lfeSensitivity: 0.9,
+        lfeCoreSize: 0.5,
+        chromaticAberration: 0.5,
+        rippleIntensity: 1.0,
+        showBlastWave: true,
+        showLabels: true,
+        useReactiveRGB: false,
       },
+      eclipse: { sensitivity: 1.2, reactivity: 0.8, enableShake: true },
+      shatter: { sensitivity: 1.1, reactivity: 0.7, enableShake: true },
     } as Record<
       VisualizerStyle,
       {
@@ -36,6 +44,12 @@ const DEFAULT_SETTINGS = {
         enableShake: boolean;
         centerSensitivity?: number;
         lfeSensitivity?: number;
+        lfeCoreSize?: number;
+        chromaticAberration?: number;
+        rippleIntensity?: number;
+        showBlastWave?: boolean;
+        showLabels?: boolean;
+        useReactiveRGB?: boolean;
       }
     >,
   },
@@ -45,9 +59,57 @@ const DEFAULT_SETTINGS = {
   theme: {
     accentColor: "#06b6d4", // cyan-500
   },
+  presence: {
+    enableRichPresence: true,
+  },
 };
 
-export type AppSettings = typeof DEFAULT_SETTINGS;
+export interface VisualizerSettings {
+  sensitivity: number;
+  reactivity: number;
+  enableShake: boolean;
+  showFps: boolean;
+  resolution: "native" | "efficient";
+  useIndividualSettings: boolean;
+  centerSensitivity: number;
+  lfeSensitivity: number;
+  // Optional surround settings (mixed in during render)
+  lfeCoreSize?: number;
+  chromaticAberration?: number;
+  rippleIntensity?: number;
+  showBlastWave?: boolean;
+  showLabels?: boolean;
+  useReactiveRGB?: boolean;
+  perVisualizer: Record<
+    VisualizerStyle,
+    {
+      sensitivity: number;
+      reactivity: number;
+      enableShake: boolean;
+      centerSensitivity?: number;
+      lfeSensitivity?: number;
+      lfeCoreSize?: number;
+      chromaticAberration?: number;
+      rippleIntensity?: number;
+      showBlastWave?: boolean;
+      showLabels?: boolean;
+      useReactiveRGB?: boolean;
+    }
+  >;
+}
+
+export interface AppSettings {
+  visualizer: VisualizerSettings;
+  audio: {
+    enableGapless: boolean;
+  };
+  theme: {
+    accentColor: string;
+  };
+  presence: {
+    enableRichPresence: boolean;
+  };
+}
 
 interface SettingsContextType {
   settings: AppSettings;
@@ -59,6 +121,11 @@ interface SettingsContextType {
     enableShake: boolean;
     centerSensitivity?: number;
     lfeSensitivity?: number;
+    lfeCoreSize?: number;
+    chromaticAberration?: number;
+    rippleIntensity?: number;
+    showBlastWave?: boolean;
+    useReactiveRGB?: boolean;
   };
   updateSettings: (newSettings: Partial<AppSettings>) => void;
   updateVisualizerSettings: (
@@ -109,16 +176,25 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({
                 ...DEFAULT_SETTINGS.visualizer.perVisualizer.surround,
                 ...(parsed.visualizer?.perVisualizer?.surround || {}),
               },
+              eclipse: {
+                ...DEFAULT_SETTINGS.visualizer.perVisualizer.eclipse,
+                ...(parsed.visualizer?.perVisualizer?.eclipse || {}),
+              },
+              shatter: {
+                ...DEFAULT_SETTINGS.visualizer.perVisualizer.shatter,
+                ...(parsed.visualizer?.perVisualizer?.shatter || {}),
+              },
             },
-          },
+          } as VisualizerSettings,
           audio: { ...DEFAULT_SETTINGS.audio, ...parsed.audio },
           theme: { ...DEFAULT_SETTINGS.theme, ...parsed.theme },
+          presence: { ...DEFAULT_SETTINGS.presence, ...parsed.presence },
         };
       } catch (e) {
-        return DEFAULT_SETTINGS;
+        return DEFAULT_SETTINGS as unknown as AppSettings;
       }
     }
-    return DEFAULT_SETTINGS;
+    return DEFAULT_SETTINGS as unknown as AppSettings;
   });
 
   // Computed visualizer settings based on global vs individual
@@ -132,6 +208,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({
       enableShake: settings.visualizer.enableShake,
       centerSensitivity: settings.visualizer.centerSensitivity,
       lfeSensitivity: settings.visualizer.lfeSensitivity,
+      lfeCoreSize: settings.visualizer.perVisualizer.surround.lfeCoreSize,
+      chromaticAberration:
+        settings.visualizer.perVisualizer.surround.chromaticAberration,
+      rippleIntensity:
+        settings.visualizer.perVisualizer.surround.rippleIntensity,
+      showBlastWave: settings.visualizer.perVisualizer.surround.showBlastWave,
+      showLabels: settings.visualizer.perVisualizer.surround.showLabels,
+      useReactiveRGB: settings.visualizer.perVisualizer.surround.useReactiveRGB,
     };
   }, [settings.visualizer, currentStyle]);
 

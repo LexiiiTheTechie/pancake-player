@@ -181,6 +181,11 @@ export const useQueue = ({ enableGapless }: UseQueueProps) => {
     }
   };
 
+  const clearQueue = useCallback(() => {
+    setQueue([]);
+    setCurrentTrackIndex(null);
+  }, [setCurrentTrackIndex]);
+
   const updateTrackMetadata = useCallback(
     async (trackPath: string, artist: string, title: string, album: string) => {
       try {
@@ -259,6 +264,7 @@ export const useQueue = ({ enableGapless }: UseQueueProps) => {
     addFiles,
     reorderQueue,
     removeFromQueue,
+    clearQueue,
     updateTrackMetadata,
     processPaths,
     setupDragDrop,

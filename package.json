@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "bridge": "node discord-bridge.cjs",
+    "build-sidecar": "pkg discord-bridge.cjs --target node18-win-x64 --output bin/discord-bridge-x86_64-pc-windows-msvc.exe",
+    "build-all": "npm run build-sidecar && npm run tauri build",
+    "dev-full": "npm run bridge & npm run dev",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
@@ -18,6 +22,7 @@
     "@tauri-apps/plugin-global-shortcut": "^2.3.1",
     "@tauri-apps/plugin-opener": "^2",
     "@types/three": "^0.181.0",
+    "discord-rpc": "^4.0.1",
     "lucide-react": "^0.545.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

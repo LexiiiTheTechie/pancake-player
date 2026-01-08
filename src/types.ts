@@ -49,4 +49,9 @@ export interface AudioFileInfo {
 
 export type RepeatMode = "none" | "all" | "one";
 export type Tab = "queue" | "visualizer" | "home" | "playlist";
-export type VisualizerStyle = "mirror" | "standard" | "surround";
+export type VisualizerStyle =
+  | "mirror"
+  | "standard"
+  | "surround"
+  | "eclipse"
+  | "shatter";

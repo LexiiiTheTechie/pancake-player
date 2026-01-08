@@ -19,6 +19,9 @@ export const useGlobalShortcuts = ({
     togglePlayPause,
   });
 
+  // Timestamp to prevent double-firing (debounce)
+  const lastActionTimeRef = useRef<number>(0);
+
   // Always keep the ref updated with the latest functions
   useEffect(() => {
     handlersRef.current = {
@@ -33,19 +36,28 @@ export const useGlobalShortcuts = ({
       try {
         await unregisterAll();
 
-        await register("MediaPlayPause", (event) => {
-          if (event.state === "Pressed") {
+        await register("MediaPlayPause", () => {
+          const now = Date.now();
+          if (now - lastActionTimeRef.current > 300) {
+            console.log("Global Shortcut: Play/Pause");
             handlersRef.current.togglePlayPause();
+            lastActionTimeRef.current = now;
           }
         });
-        await register("MediaTrackNext", (event) => {
-          if (event.state === "Pressed") {
+        await register("MediaNextTrack", () => {
+          const now = Date.now();
+          if (now - lastActionTimeRef.current > 300) {
+            console.log("Global Shortcut: Next");
             handlersRef.current.playNext();
+            lastActionTimeRef.current = now;
           }
         });
-        await register("MediaTrackPrevious", (event) => {
-          if (event.state === "Pressed") {
+        await register("MediaPrevTrack", () => {
+          const now = Date.now();
+          if (now - lastActionTimeRef.current > 300) {
+            console.log("Global Shortcut: Previous");
             handlersRef.current.playPrevious();
+            lastActionTimeRef.current = now;
           }
         });
         console.log("Global shortcuts registered");

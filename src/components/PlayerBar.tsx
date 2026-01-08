@@ -9,6 +9,8 @@ import {
   Shuffle,
   Repeat,
   Repeat1,
+  RotateCcw,
+  RotateCw,
 } from "lucide-react";
 import IconButton from "./IconButton";
 import { Track, RepeatMode } from "../types";
@@ -28,6 +30,7 @@ interface PlayerBarProps {
   duration: number;
   setCurrentTime: (time: number) => void;
   onSeek: (time: number) => void;
+  onSeekBy: (seconds: number) => void;
   volume: number;
   setVolume: (volume: number) => void;
   isMuted: boolean;
@@ -88,6 +91,7 @@ const PlayerBar: React.FC<PlayerBarProps> = ({
   currentTime,
   duration,
   onSeek,
+  onSeekBy,
   volume,
   setVolume,
   isMuted,
@@ -126,6 +130,12 @@ const PlayerBar: React.FC<PlayerBarProps> = ({
             size={18}
           />
           <IconButton
+            icon={RotateCcw}
+            onClick={() => onSeekBy(-10)}
+            disabled={!currentTrack}
+            size={18}
+          />
+          <IconButton
             icon={SkipBack}
             onClick={playPrevious}
             disabled={!currentTrack}
@@ -145,6 +155,12 @@ const PlayerBar: React.FC<PlayerBarProps> = ({
             icon={SkipForward}
             onClick={playNext}
             disabled={!currentTrack}
+          />
+          <IconButton
+            icon={RotateCw}
+            onClick={() => onSeekBy(10)}
+            disabled={!currentTrack}
+            size={18}
           />
           <IconButton
             icon={repeat === "one" ? Repeat1 : Repeat}

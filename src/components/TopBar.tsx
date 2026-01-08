@@ -119,6 +119,26 @@ const TopBar: React.FC<TopBarProps> = ({
               >
                 Surround
               </button>
+              <button
+                onClick={() => setVisualizerStyle("eclipse")}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                  visualizerStyle === "eclipse"
+                    ? "bg-cyan-500/20 text-cyan-400"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                Eclipse
+              </button>
+              <button
+                onClick={() => setVisualizerStyle("shatter")}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                  visualizerStyle === "shatter"
+                    ? "bg-cyan-500/20 text-cyan-400"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                Shatter
+              </button>
             </div>
           )}
 
