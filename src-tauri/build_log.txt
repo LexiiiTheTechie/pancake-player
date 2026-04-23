@@ -1,0 +1,40 @@
+    Checking pancake v0.1.0 (C:\Users\nitro\Downloads\pancake_tauri\pancake\src-tauri)
+error[E0599]: no method named `map_err` found for struct `DiscordIpcClient` in the current scope
+  --> src\discord_rpc.rs:27:10
+   |
+26 |       let mut client = DiscordIpcClient::new("1441191089389436970")
+   |  ______________________-
+27 | |         .map_err(|e| format!("Failed to create Discord client: {}", e))?;
+   | |         -^^^^^^^ method not found in `DiscordIpcClient`
+   | |_________|
+   |
+
+error[E0597]: `large` does not live long enough
+  --> src\discord_rpc.rs:56:41
+   |
+55 |         if let Some(large) = large_image {
+   |                     ----- binding `large` declared here
+56 |             assets = assets.large_image(&large);
+   |                                         ^^^^^^ borrowed value does not live long enough
+57 |         }
+   |         - `large` dropped here while still borrowed
+...
+60 |             assets = assets.small_image(&small);
+   |                      ------ borrow later used here
+
+error[E0597]: `small` does not live long enough
+  --> src\discord_rpc.rs:60:41
+   |
+59 |         if let Some(small) = small_image {
+   |                     ----- binding `small` declared here
+60 |             assets = assets.small_image(&small);
+   |                                         ^^^^^^ borrowed value does not live long enough
+61 |         }
+   |         - `small` dropped here while still borrowed
+...
+68 |         activity = activity.assets(assets);
+   |                                    ------ borrow later used here
+
+Some errors have detailed explanations: E0597, E0599.
+For more information about an error, try `rustc --explain E0597`.
+error: could not compile `pancake` (lib) due to 3 previous errors

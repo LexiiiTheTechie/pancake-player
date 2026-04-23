@@ -1,0 +1,17 @@
+    Checking pancake v0.1.0 (C:\Users\nitro\Downloads\pancake_tauri\pancake\src-tauri)
+error[E0107]: struct takes 0 lifetime arguments but 1 lifetime argument was supplied
+  --> src\discord_rpc.rs:6:30
+   |
+ 6 |     pub client: Mutex<Option<DiscordIpcClient<'static>>>,
+   |                              ^^^^^^^^^^^^^^^^--------- help: remove the unnecessary generics
+   |                              |
+   |                              expected 0 lifetime arguments
+   |
+note: struct defined here, with 0 lifetime parameters
+  --> C:\Users\nitro\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\discord-rich-presence-1.0.0\src\ipc_windows.rs:16:12
+   |
+16 | pub struct DiscordIpcClient {
+   |            ^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0107`.
+error: could not compile `pancake` (lib) due to 1 previous error

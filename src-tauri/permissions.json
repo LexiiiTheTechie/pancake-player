@@ -1,0 +1,15 @@
+{
+  "default": {
+    "description": "Allows all custom commands",
+    "commands": {
+      "allow": [
+        "get_audio_metadata",
+        "save_playlist",
+        "load_playlist",
+        "get_playlists",
+        "delete_playlist",
+        "greet"
+      ]
+    }
+  }
+}
