@@ -24,7 +24,7 @@
     ],
     "security": {
       "capabilities": ["default"],
-      "csp": "default-src 'self' data: http://asset.localhost 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ws: wss: http://asset.localhost http://127.0.0.1:33333; media-src 'self' data: http://asset.localhost;",
+      "csp": "default-src 'self' data: http://asset.localhost 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ws: wss: http://asset.localhost http://127.0.0.1:33333; media-src 'self' data: http://asset.localhost; img-src 'self' data: http://asset.localhost asset:;",
       "assetProtocol": {
         "enable": true,
         "scope": ["**"]

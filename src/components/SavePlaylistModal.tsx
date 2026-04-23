@@ -4,22 +4,25 @@ import { X } from 'lucide-react';
 interface SavePlaylistModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (name: string) => void;
+  onSave: (name: string, tags: string[]) => void;
 }
 
 const SavePlaylistModal: React.FC<SavePlaylistModalProps> = ({ isOpen, onClose, onSave }) => {
   const [playlistName, setPlaylistName] = useState('');
+  const [tags, setTags] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       setPlaylistName('');
+      setTags('');
     }
   }, [isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (playlistName.trim()) {
-      onSave(playlistName.trim());
+      const tagList = tags.split(',').map(t => t.trim()).filter(t => t !== "");
+      onSave(playlistName.trim(), tagList);
       onClose();
     }
   };
@@ -40,7 +43,7 @@ const SavePlaylistModal: React.FC<SavePlaylistModalProps> = ({ isOpen, onClose, 
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="mb-6">
+          <div className="mb-4">
             <label htmlFor="playlist-name" className="block text-sm font-medium text-gray-300 mb-2">
               Playlist Name
             </label>
@@ -51,6 +54,20 @@ const SavePlaylistModal: React.FC<SavePlaylistModalProps> = ({ isOpen, onClose, 
               onChange={(e) => setPlaylistName(e.target.value)}
               placeholder="Enter playlist name..."
               autoFocus
+              className="w-full bg-gray-800 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
+            />
+          </div>
+
+          <div className="mb-6">
+            <label htmlFor="playlist-tags" className="block text-sm font-medium text-gray-300 mb-2">
+              Tags (comma separated)
+            </label>
+            <input
+              id="playlist-tags"
+              type="text"
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder="e.g. Chill, Rock, Gaming"
               className="w-full bg-gray-800 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
             />
           </div>

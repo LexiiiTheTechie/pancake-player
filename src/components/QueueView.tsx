@@ -6,6 +6,7 @@ import ContextMenu from "./ContextMenu";
 import MetadataEditorModal from "./MetadataEditorModal";
 import FileInfoModal from "./FileInfoModal";
 import { invoke } from "@tauri-apps/api/core";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   DndContext,
   closestCenter,
@@ -426,6 +427,10 @@ const QueueView: React.FC<QueueViewProps> = ({
             handleFileInfo(contextMenu.track);
             setContextMenu(null);
           }}
+          onRevealInExplorer={() => {
+            revealItemInDir(contextMenu.track.path);
+            setContextMenu(null);
+          }}
           onRemove={() => {
             removeFromQueue(contextMenu.index);
             setContextMenu(null);
@@ -451,4 +456,11 @@ const QueueView: React.FC<QueueViewProps> = ({
   );
 };
 
-export default QueueView;
+export default React.memo(QueueView, (prevProps, nextProps) => {
+  return (
+    prevProps.queue === nextProps.queue &&
+    prevProps.currentTrackIndex === nextProps.currentTrackIndex &&
+    prevProps.isPlaying === nextProps.isPlaying &&
+    prevProps.searchQuery === nextProps.searchQuery
+  );
+});

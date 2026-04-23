@@ -152,7 +152,7 @@ const AppContent: React.FC = () => {
 
   // --- Playlist Logic (Still in App.tsx for now as it bridges UI and state) ---
 
-  const handleSavePlaylist = async (name: string) => {
+  const handleSavePlaylist = async (name: string, tags: string[]) => {
     try {
       const tracksToSave = queue.map((t) => ({
         path: t.path,
@@ -163,7 +163,12 @@ const AppContent: React.FC = () => {
         album: t.album === "Unknown Album" ? null : t.album,
       }));
 
-      await invoke("save_playlist", { name, tracks: tracksToSave });
+      await invoke("save_playlist", { 
+        name, 
+        tracks: tracksToSave, 
+        tags,
+        folder_path: null
+      });
       alert(`Playlist "${name}" saved!`);
       setIsSaveModalOpen(false);
     } catch (e) {
@@ -264,6 +269,7 @@ const AppContent: React.FC = () => {
             <Home
               onPlayPlaylist={playPlaylist}
               onViewPlaylist={handleViewPlaylist}
+              searchQuery={searchQuery}
             />
           )}
         </div>

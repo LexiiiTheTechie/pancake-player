@@ -6,12 +6,13 @@ interface PlaylistCardProps {
   name: string;
   trackCount?: number;
   coverImage?: string;
+  tags?: string[];
   onPlay: () => void;
   onView: () => void;
   onDelete?: () => void;
 }
 
-const PlaylistCard: React.FC<PlaylistCardProps> = ({ name, trackCount, coverImage, onPlay, onView, onDelete }) => {
+const PlaylistCard: React.FC<PlaylistCardProps> = ({ name, trackCount, coverImage, tags = [], onPlay, onView, onDelete }) => {
   return (
     <div 
       className="group relative bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-cyan-500/10 cursor-pointer"
@@ -22,6 +23,7 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ name, trackCount, coverImag
           <img 
             src={convertFileSrc(coverImage)} 
             alt={name} 
+            loading="lazy"
             className="w-full h-full object-cover"
           />
         ) : (
@@ -42,9 +44,9 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ name, trackCount, coverImag
         </div>
       </div>
 
-      <div className="flex justify-between items-start">
+      <div className="flex justify-between items-start mb-1">
         <div className="min-w-0 flex-1">
-          <h3 className="font-bold text-white truncate pr-2 text-lg" title={name}>{name}</h3>
+          <h3 className="font-bold text-white line-clamp-2 pr-2 text-lg leading-tight h-[44px] overflow-hidden" title={name}>{name}</h3>
           <p className="text-sm text-gray-400 font-medium">
             {trackCount !== undefined ? `${trackCount} tracks` : 'Playlist'}
           </p>
@@ -63,6 +65,21 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ name, trackCount, coverImag
           </button>
         )}
       </div>
+
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {tags.slice(0, 3).map(tag => (
+            <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 rounded-md border border-cyan-500/20 truncate max-w-[80px]">
+              {tag}
+            </span>
+          ))}
+          {tags.length > 3 && (
+            <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-gray-500 rounded-md">
+              +{tags.length - 3}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 };

@@ -10,6 +10,10 @@ export class SurroundRenderer implements IVisualizerRenderer {
   private prevSurroundEnergies = new Float32Array(8); // C, L, R, SL, SR, BL, BR, LFE
   private pointsX = new Float32Array(181);
   private pointsY = new Float32Array(181);
+  
+  // Prevent memory thrashing by caching array allocations
+  private channelArrays: Uint8Array[] = [];
+  private currentBufferLength = 0;
 
   // Static speaker layout for performance
   private static readonly SPEAKER_LAYOUT = [
@@ -54,14 +58,23 @@ export class SurroundRenderer implements IVisualizerRenderer {
 
     analyser.getByteFrequencyData(dataArray as any);
 
+    // Re-allocate arrays if buffer length changes
+    if (this.currentBufferLength !== bufferLength) {
+      this.currentBufferLength = bufferLength;
+      this.channelArrays = Array.from({ length: 8 }, () => new Uint8Array(bufferLength));
+    }
+
     // --- 7.1 SURROUND DATA PROCESSING ---
     const channelData: Uint8Array[] = [];
     if (channels && channels.length >= 2) {
-      channels.forEach((ch) => {
-        const arr = new Uint8Array(bufferLength);
-        ch.getByteFrequencyData(arr as any);
+      for (let i = 0; i < channels.length; i++) {
+        if (!this.channelArrays[i]) {
+          this.channelArrays[i] = new Uint8Array(bufferLength);
+        }
+        const arr = this.channelArrays[i];
+        channels[i].getByteFrequencyData(arr as any);
         channelData.push(arr);
-      });
+      }
     } else {
       channelData.push(dataArray);
       channelData.push(dataArray);

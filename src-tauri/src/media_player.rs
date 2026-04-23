@@ -414,9 +414,7 @@ pub async fn get_audio_metadata(file_path: String, enable_gapless: bool) -> Resu
             if cover_image.is_none() {
                 cover_image = sym_cover;
             }
-        }
-
-        // --- NEW: Local Folder Cover Fallback ---
+             // --- NEW: Local Folder Cover Fallback ---
         // If still no cover, look for Cover.jpg/png etc in the same directory
         if cover_image.is_none() {
             if let Some(parent) = path.parent() {
@@ -424,21 +422,34 @@ pub async fn get_audio_metadata(file_path: String, enable_gapless: bool) -> Resu
                 let img_exts = ["jpg", "jpeg", "png", "webp"];
                 
                 if let Ok(entries) = std::fs::read_dir(parent) {
+                    let mut found_images = Vec::new();
                     for entry in entries.flatten() {
                         let p = entry.path();
                         if p.is_file() {
                             let stem = p.file_stem().and_then(|s| s.to_str()).map(|s| s.to_lowercase()).unwrap_or_default();
                             let ext = p.extension().and_then(|e| e.to_str()).map(|s| s.to_lowercase()).unwrap_or_default();
                             
-                            if img_exts.contains(&ext.as_str()) && cover_names.iter().any(|&cn| stem == cn || stem.contains(cn)) {
-                                cover_image = Some(p.to_string_lossy().to_string());
-                                break;
+                            if img_exts.contains(&ext.as_str()) {
+                                if cover_names.iter().any(|&cn| stem == cn || stem.contains(cn)) {
+                                    // High priority match
+                                    cover_image = Some(p.to_string_lossy().to_string());
+                                    eprintln!("✅ Found local cover artist match: {:?}", p);
+                                    break;
+                                }
+                                found_images.push(p);
                             }
                         }
+                    }
+                    
+                    // If no named cover found, but we found images, use the first one as last resort
+                    if cover_image.is_none() && !found_images.is_empty() {
+                        cover_image = Some(found_images[0].to_string_lossy().to_string());
+                        eprintln!("ℹ️ Using fallback image from folder: {:?}", found_images[0]);
                     }
                 }
             }
         }
+    }
 
         // Fallback title to filename if still missing
         let final_title = if let Some(t) = title {

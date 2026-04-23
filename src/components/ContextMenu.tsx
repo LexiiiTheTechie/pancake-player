@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Edit3, Trash2, Info } from "lucide-react";
+import { Edit3, Trash2, Info, FolderOpen } from "lucide-react";
 
 interface ContextMenuProps {
   x: number;
@@ -7,6 +7,7 @@ interface ContextMenuProps {
   onClose: () => void;
   onEditMetadata: () => void;
   onFileInfo: () => void;
+  onRevealInExplorer: () => void;
   onRemove: () => void;
 }
 
@@ -16,6 +17,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   onClose,
   onEditMetadata,
   onFileInfo,
+  onRevealInExplorer,
   onRemove,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -67,6 +69,16 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
       >
         <Info size={16} className="text-blue-400" />
         File Info
+      </button>
+      <button
+        onClick={() => {
+          onRevealInExplorer();
+          onClose();
+        }}
+        className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/10 transition-colors flex items-center gap-3"
+      >
+        <FolderOpen size={16} className="text-yellow-400" />
+        Open File Location
       </button>
       <div className="border-t border-white/5 my-1" />
       <button

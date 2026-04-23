@@ -9,6 +9,10 @@ pub struct Playlist {
     pub name: String,
     pub tracks: Vec<Track>,
     pub cover_image: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub folder_path: Option<String>,
 }
 
 fn get_playlist_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -39,14 +43,18 @@ pub fn save_playlist(
     name: String,
     tracks: Vec<Track>,
     cover_image: Option<String>,
+    tags: Option<Vec<String>>,
+    folder_path: Option<String>,
 ) -> Result<(), String> {
-    println!("Saving playlist: {}, cover_image: {:?}", name, cover_image);
+    println!("Saving playlist: {}, tags: {:?}, folder: {:?}", name, tags, folder_path);
     let file_path = get_playlist_path(&app, &name)?;
 
     let playlist = Playlist {
         name,
         tracks,
         cover_image,
+        tags: tags.unwrap_or_default(),
+        folder_path,
     };
 
     save_playlist_to_disk(&file_path, &playlist)?;
@@ -72,6 +80,10 @@ pub struct PlaylistSummary {
     pub name: String,
     pub track_count: usize,
     pub cover_image: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub folder_path: Option<String>,
 }
 
 #[tauri::command]
@@ -87,13 +99,13 @@ pub fn get_playlists(app: AppHandle) -> Result<Vec<PlaylistSummary>, String> {
                     if extension == "json" {
                         // Read the file to get the metadata
                         if let Ok(json) = fs::read_to_string(&path) {
-                            // We deserialize to Playlist to get the track count,
-                            // but we don't send the tracks to the frontend.
                             if let Ok(playlist) = serde_json::from_str::<Playlist>(&json) {
                                 playlists.push(PlaylistSummary {
                                     name: playlist.name,
                                     track_count: playlist.tracks.len(),
                                     cover_image: playlist.cover_image,
+                                    tags: playlist.tags,
+                                    folder_path: playlist.folder_path,
                                 });
                             }
                         }
@@ -138,6 +150,23 @@ pub fn rename_playlist(app: AppHandle, old_name: String, new_name: String) -> Re
     save_playlist_to_disk(&new_path, &playlist)?;
     fs::remove_file(&old_path).map_err(|e| e.to_string())?;
 
+    Ok(())
+}
+
+#[tauri::command]
+pub fn update_playlist_tags(app: AppHandle, name: String, tags: Vec<String>) -> Result<(), String> {
+    println!("Updating tags for playlist: {} to {:?}", name, tags);
+    let file_path = get_playlist_path(&app, &name)?;
+
+    if !file_path.exists() {
+        return Err("Playlist not found".to_string());
+    }
+
+    let json = fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
+    let mut playlist: Playlist = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+    playlist.tags = tags;
+
+    save_playlist_to_disk(&file_path, &playlist)?;
     Ok(())
 }
 
@@ -221,11 +250,29 @@ pub async fn import_folder_as_playlist(
     // Prepare cover image (use path instead of base64 for better performance/compatibility)
     let cover_image_path = image_path.map(|p| p.to_string_lossy().to_string());
 
-    let playlist = Playlist {
+    let mut playlist = Playlist {
         name: folder_name.clone(),
         tracks,
         cover_image: cover_image_path.clone(),
+        tags: Vec::new(),
+        folder_path: Some(folder_path.clone()),
     };
+
+    // Auto-generate tags from unique artists found in the tracks
+    let mut artists: Vec<String> = playlist.tracks.iter()
+        .filter_map(|t| t.artist.clone())
+        .flat_map(|a| {
+            a.replace("feat.", ",")
+             .replace('&', ",")
+             .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| s != "Unknown Artist" && !s.is_empty())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    artists.sort();
+    artists.dedup();
+    playlist.tags = artists;
 
     let file_path = get_playlist_path(&app, &folder_name)?;
     save_playlist_to_disk(&file_path, &playlist)?;
@@ -234,5 +281,7 @@ pub async fn import_folder_as_playlist(
         name: folder_name,
         track_count: playlist.tracks.len(),
         cover_image: cover_image_path,
+        tags: playlist.tags,
+        folder_path: playlist.folder_path,
     })
 }

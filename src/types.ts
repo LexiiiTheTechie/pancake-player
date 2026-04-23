@@ -24,12 +24,16 @@ export interface Playlist {
   name: string;
   tracks: Track[];
   cover_image?: string;
+  tags?: string[];
+  folder_path?: string;
 }
 
 export interface PlaylistSummary {
   name: string;
   track_count: number;
   cover_image?: string;
+  tags?: string[];
+  folder_path?: string;
 }
 
 export interface AudioFileInfo {

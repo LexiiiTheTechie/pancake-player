@@ -80,6 +80,7 @@ pub fn run() {
             playlist::delete_playlist,
             playlist::rename_playlist,
             playlist::import_folder_as_playlist,
+            playlist::update_playlist_tags,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
