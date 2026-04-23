@@ -2,7 +2,7 @@
 
 An extremely performant, modern audio player built with Tauri, React, and Rust. Pancake Player combines the speed and efficiency of Rust with a beautiful, responsive React interface to deliver a premium music listening experience.
 
-![Version](https://img.shields.io/badge/version-0.1.0-blue)
+![Version](https://img.shields.io/badge/version-4.0.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
@@ -13,6 +13,7 @@ An extremely performant, modern audio player built with Tauri, React, and Rust. 
 - **High-Performance Audio Engine**: Leverages Rust's Symphonia library for efficient audio decoding
 - **Multiple Format Support**: Plays MP3, FLAC, WAV, OGG, M4A, and more
 - **Gapless Playback**: Seamless transitions between tracks
+- **Session Persistence**: Remembers your volume, shuffle, repeat mode, and visualizer style between launches
 - **Advanced Audio Controls**: Play, pause, skip, seek, shuffle, and repeat modes
 
 ### 🎨 User Interface
