@@ -1,1 +1,8 @@
 node_modules
+dist
+dist-isolation
+src-tauri/target
+bin/*.exe
+.DS_Store
+.env
+*.log
