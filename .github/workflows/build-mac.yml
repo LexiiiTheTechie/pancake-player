@@ -25,22 +25,27 @@ jobs:
           targets: aarch64-apple-darwin
 
       - name: Install frontend dependencies
-        run: npm ci
+        # If package.json is also in the subfolder, add --prefix
+        run: npm ci --prefix pancake-player
 
       - name: Build Tauri app (Apple Silicon)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          # This tells the action where your tauri.conf.json and src-tauri are
+          projectPath: pancake-player
           args: --target aarch64-apple-darwin
           includeUpdaterJson: false
 
       - name: List bundle output
-        run: find src-tauri/target/aarch64-apple-darwin/release/bundle -type f 2>/dev/null || echo "Bundle dir not found"
+        # Updated path to include the subfolder for verification
+        run: find pancake-player/src-tauri/target/aarch64-apple-darwin/release/bundle -type f 2>/dev/null || echo "Bundle dir not found"
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
           name: pancake-player-macos-arm
-          path: src-tauri/target/aarch64-apple-darwin/release/bundle/
+          # Using the full relative path from the repo root
+          path: pancake-player/src-tauri/target/aarch64-apple-darwin/release/bundle/
           retention-days: 14
