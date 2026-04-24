@@ -12,8 +12,8 @@
     "windows": [
       {
         "title": "Pancake Player",
-        "width": 1600,
-        "height": 780,
+        "width": 1700,
+        "height": 900,
         "minWidth": 800,
         "minHeight": 600,
         "resizable": true,
