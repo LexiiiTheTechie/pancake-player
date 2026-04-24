@@ -33,7 +33,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi"],
+    "targets": ["nsis", "msi", "dmg", "app"],
     "externalBin": [],
     "icon": [
       "icons/32x32.png",
