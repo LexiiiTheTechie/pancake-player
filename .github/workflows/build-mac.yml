@@ -35,12 +35,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: List bundle output
-        run: find src-tauri/target/aarch64-apple-darwin/release/bundle -type f
+      - name: Find DMG (Debug)
+        # This helps you see exactly where the file is if the upload fails
+        run: find src-tauri/target -name "*.dmg"
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
           name: pancake-player-macos-arm
-          path: src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/
+          # This search pattern is much more robust
+          path: src-tauri/target/**/release/bundle/dmg/*.dmg
           retention-days: 14
+          if-no-files-found: error
