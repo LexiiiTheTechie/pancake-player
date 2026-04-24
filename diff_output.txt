@@ -1,0 +1,1418 @@
+diff --git a/.gitignore b/.gitignore
+index 3c3629e..94a1c5c 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1 +1,8 @@
+ node_modules
++dist
++dist-isolation
++src-tauri/target
++bin/*.exe
++.DS_Store
++.env
++*.log
+diff --git a/README.md b/README.md
+index ac522e3..d955691 100644
+--- a/README.md
++++ b/README.md
+@@ -2,7 +2,7 @@
+ 
+ An extremely performant, modern audio player built with Tauri, React, and Rust. Pancake Player combines the speed and efficiency of Rust with a beautiful, responsive React interface to deliver a premium music listening experience.
+ 
+-![Version](https://img.shields.io/badge/version-0.1.0-blue)
++![Version](https://img.shields.io/badge/version-4.0.0-blue)
+ ![License](https://img.shields.io/badge/license-MIT-green)
+ ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+ 
+@@ -13,6 +13,7 @@ An extremely performant, modern audio player built with Tauri, React, and Rust.
+ - **High-Performance Audio Engine**: Leverages Rust's Symphonia library for efficient audio decoding
+ - **Multiple Format Support**: Plays MP3, FLAC, WAV, OGG, M4A, and more
+ - **Gapless Playback**: Seamless transitions between tracks
++- **Session Persistence**: Remembers your volume, shuffle, repeat mode, and visualizer style between launches
+ - **Advanced Audio Controls**: Play, pause, skip, seek, shuffle, and repeat modes
+ 
+ ### 🎨 User Interface
+diff --git a/package-lock.json b/package-lock.json
+index ba9e04a..a73b823 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "pancake",
+-  "version": "0.1.0",
++  "version": "4.0.0",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "pancake",
+-      "version": "0.1.0",
++      "version": "4.0.0",
+       "dependencies": {
+         "@dnd-kit/core": "^6.3.1",
+         "@dnd-kit/sortable": "^10.0.0",
+@@ -15,6 +15,7 @@
+         "@fontsource/inter": "^5.2.8",
+         "@fontsource/nunito": "^5.2.7",
+         "@fontsource/outfit": "^5.2.8",
++        "@tanstack/react-virtual": "^3.13.24",
+         "@tauri-apps/api": "^2.8.0",
+         "@tauri-apps/plugin-dialog": "^2.4.0",
+         "@tauri-apps/plugin-global-shortcut": "^2.3.1",
+@@ -1218,6 +1219,33 @@
+         "win32"
+       ]
+     },
++    "node_modules/@tanstack/react-virtual": {
++      "version": "3.13.24",
++      "resolved": "https://registry.npmjs.org/@tanstack/react-virtual/-/react-virtual-3.13.24.tgz",
++      "integrity": "sha512-aIJvz5OSkhNIhZIpYivrxrPTKYsjW9Uzy+sP/mx0S3sev2HyvPb7xmjbYvokzEpfgYHy/HjzJ2zFAETuUfgCpg==",
++      "license": "MIT",
++      "dependencies": {
++        "@tanstack/virtual-core": "3.14.0"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/tannerlinsley"
++      },
++      "peerDependencies": {
++        "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0",
++        "react-dom": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
++      }
++    },
++    "node_modules/@tanstack/virtual-core": {
++      "version": "3.14.0",
++      "resolved": "https://registry.npmjs.org/@tanstack/virtual-core/-/virtual-core-3.14.0.tgz",
++      "integrity": "sha512-JLANqGy/D6k4Ujmh8Tr25lGimuOXNiaVyXaCAZS0W+1390sADdGnyUdSWNIfd49gebtIxGMij4IktRVzrdr12Q==",
++      "license": "MIT",
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/tannerlinsley"
++      }
++    },
+     "node_modules/@tauri-apps/api": {
+       "version": "2.8.0",
+       "resolved": "https://registry.npmjs.org/@tauri-apps/api/-/api-2.8.0.tgz",
+diff --git a/package.json b/package.json
+index 06422e8..b2caf77 100644
+--- a/package.json
++++ b/package.json
+@@ -21,6 +21,7 @@
+     "@fontsource/inter": "^5.2.8",
+     "@fontsource/nunito": "^5.2.7",
+     "@fontsource/outfit": "^5.2.8",
++    "@tanstack/react-virtual": "^3.13.24",
+     "@tauri-apps/api": "^2.8.0",
+     "@tauri-apps/plugin-dialog": "^2.4.0",
+     "@tauri-apps/plugin-global-shortcut": "^2.3.1",
+diff --git a/src-tauri/Cargo.toml b/src-tauri/Cargo.toml
+index 7db7206..851717c 100644
+--- a/src-tauri/Cargo.toml
++++ b/src-tauri/Cargo.toml
+@@ -2,7 +2,7 @@
+ name = "pancake"
+ version = "4.0.0"
+ description = "A Tauri App"
+-authors = ["you"]
++authors = ["LexiiiTheTechie"]
+ edition = "2021"
+ 
+ [lib]
+diff --git a/src-tauri/capabilities/default.json b/src-tauri/capabilities/default.json
+index aaf22f5..a4d386e 100644
+--- a/src-tauri/capabilities/default.json
++++ b/src-tauri/capabilities/default.json
+@@ -26,6 +26,14 @@
+     "global-shortcut:allow-register",
+     "global-shortcut:allow-unregister",
+     "global-shortcut:allow-unregister-all",
+-    "global-shortcut:allow-is-registered"
++    "global-shortcut:allow-is-registered",
++    {
++      "identifier": "opener:allow-reveal-item-in-dir",
++      "allow": [{ "path": "**" }]
++    },
++    {
++      "identifier": "opener:allow-open-path",
++      "allow": [{ "path": "**" }]
++    }
+   ]
+ }
+diff --git a/src-tauri/src/lib.rs b/src-tauri/src/lib.rs
+index 3bb9bec..a216478 100644
+--- a/src-tauri/src/lib.rs
++++ b/src-tauri/src/lib.rs
+@@ -80,6 +80,7 @@ pub fn run() {
+             playlist::delete_playlist,
+             playlist::rename_playlist,
+             playlist::import_folder_as_playlist,
++            playlist::update_playlist_tags,
+         ])
+         .run(tauri::generate_context!())
+         .expect("error while running tauri application");
+diff --git a/src-tauri/src/media_player.rs b/src-tauri/src/media_player.rs
+index 3414a26..5ff486d 100644
+--- a/src-tauri/src/media_player.rs
++++ b/src-tauri/src/media_player.rs
+@@ -414,9 +414,7 @@ pub async fn get_audio_metadata(file_path: String, enable_gapless: bool) -> Resu
+             if cover_image.is_none() {
+                 cover_image = sym_cover;
+             }
+-        }
+-
+-        // --- NEW: Local Folder Cover Fallback ---
++             // --- NEW: Local Folder Cover Fallback ---
+         // If still no cover, look for Cover.jpg/png etc in the same directory
+         if cover_image.is_none() {
+             if let Some(parent) = path.parent() {
+@@ -424,21 +422,34 @@ pub async fn get_audio_metadata(file_path: String, enable_gapless: bool) -> Resu
+                 let img_exts = ["jpg", "jpeg", "png", "webp"];
+                 
+                 if let Ok(entries) = std::fs::read_dir(parent) {
++                    let mut found_images = Vec::new();
+                     for entry in entries.flatten() {
+                         let p = entry.path();
+                         if p.is_file() {
+                             let stem = p.file_stem().and_then(|s| s.to_str()).map(|s| s.to_lowercase()).unwrap_or_default();
+                             let ext = p.extension().and_then(|e| e.to_str()).map(|s| s.to_lowercase()).unwrap_or_default();
+                             
+-                            if img_exts.contains(&ext.as_str()) && cover_names.iter().any(|&cn| stem == cn || stem.contains(cn)) {
+-                                cover_image = Some(p.to_string_lossy().to_string());
+-                                break;
++                            if img_exts.contains(&ext.as_str()) {
++                                if cover_names.iter().any(|&cn| stem == cn || stem.contains(cn)) {
++                                    // High priority match
++                                    cover_image = Some(p.to_string_lossy().to_string());
++                                    eprintln!("✅ Found local cover artist match: {:?}", p);
++                                    break;
++                                }
++                                found_images.push(p);
+                             }
+                         }
+                     }
++                    
++                    // If no named cover found, but we found images, use the first one as last resort
++                    if cover_image.is_none() && !found_images.is_empty() {
++                        cover_image = Some(found_images[0].to_string_lossy().to_string());
++                        eprintln!("ℹ️ Using fallback image from folder: {:?}", found_images[0]);
++                    }
+                 }
+             }
+         }
++    }
+ 
+         // Fallback title to filename if still missing
+         let final_title = if let Some(t) = title {
+diff --git a/src-tauri/src/playlist.rs b/src-tauri/src/playlist.rs
+index c6ac637..28e3e61 100644
+--- a/src-tauri/src/playlist.rs
++++ b/src-tauri/src/playlist.rs
+@@ -9,6 +9,10 @@ pub struct Playlist {
+     pub name: String,
+     pub tracks: Vec<Track>,
+     pub cover_image: Option<String>,
++    #[serde(default)]
++    pub tags: Vec<String>,
++    #[serde(default)]
++    pub folder_path: Option<String>,
+ }
+ 
+ fn get_playlist_dir(app: &AppHandle) -> Result<PathBuf, String> {
+@@ -39,14 +43,18 @@ pub fn save_playlist(
+     name: String,
+     tracks: Vec<Track>,
+     cover_image: Option<String>,
++    tags: Option<Vec<String>>,
++    folder_path: Option<String>,
+ ) -> Result<(), String> {
+-    println!("Saving playlist: {}, cover_image: {:?}", name, cover_image);
++    println!("Saving playlist: {}, tags: {:?}, folder: {:?}", name, tags, folder_path);
+     let file_path = get_playlist_path(&app, &name)?;
+ 
+     let playlist = Playlist {
+         name,
+         tracks,
+         cover_image,
++        tags: tags.unwrap_or_default(),
++        folder_path,
+     };
+ 
+     save_playlist_to_disk(&file_path, &playlist)?;
+@@ -72,6 +80,10 @@ pub struct PlaylistSummary {
+     pub name: String,
+     pub track_count: usize,
+     pub cover_image: Option<String>,
++    #[serde(default)]
++    pub tags: Vec<String>,
++    #[serde(default)]
++    pub folder_path: Option<String>,
+ }
+ 
+ #[tauri::command]
+@@ -87,13 +99,13 @@ pub fn get_playlists(app: AppHandle) -> Result<Vec<PlaylistSummary>, String> {
+                     if extension == "json" {
+                         // Read the file to get the metadata
+                         if let Ok(json) = fs::read_to_string(&path) {
+-                            // We deserialize to Playlist to get the track count,
+-                            // but we don't send the tracks to the frontend.
+                             if let Ok(playlist) = serde_json::from_str::<Playlist>(&json) {
+                                 playlists.push(PlaylistSummary {
+                                     name: playlist.name,
+                                     track_count: playlist.tracks.len(),
+                                     cover_image: playlist.cover_image,
++                                    tags: playlist.tags,
++                                    folder_path: playlist.folder_path,
+                                 });
+                             }
+                         }
+@@ -141,6 +153,23 @@ pub fn rename_playlist(app: AppHandle, old_name: String, new_name: String) -> Re
+     Ok(())
+ }
+ 
++#[tauri::command]
++pub fn update_playlist_tags(app: AppHandle, name: String, tags: Vec<String>) -> Result<(), String> {
++    println!("Updating tags for playlist: {} to {:?}", name, tags);
++    let file_path = get_playlist_path(&app, &name)?;
++
++    if !file_path.exists() {
++        return Err("Playlist not found".to_string());
++    }
++
++    let json = fs::read_to_string(&file_path).map_err(|e| e.to_string())?;
++    let mut playlist: Playlist = serde_json::from_str(&json).map_err(|e| e.to_string())?;
++    playlist.tags = tags;
++
++    save_playlist_to_disk(&file_path, &playlist)?;
++    Ok(())
++}
++
+ #[tauri::command]
+ pub async fn import_folder_as_playlist(
+     app: AppHandle,
+@@ -221,12 +250,30 @@ pub async fn import_folder_as_playlist(
+     // Prepare cover image (use path instead of base64 for better performance/compatibility)
+     let cover_image_path = image_path.map(|p| p.to_string_lossy().to_string());
+ 
+-    let playlist = Playlist {
++    let mut playlist = Playlist {
+         name: folder_name.clone(),
+         tracks,
+         cover_image: cover_image_path.clone(),
++        tags: Vec::new(),
++        folder_path: Some(folder_path.clone()),
+     };
+ 
++    // Auto-generate tags from unique artists found in the tracks
++    let mut artists: Vec<String> = playlist.tracks.iter()
++        .filter_map(|t| t.artist.clone())
++        .flat_map(|a| {
++            a.replace("feat.", ",")
++             .replace('&', ",")
++             .split(',')
++                .map(|s| s.trim().to_string())
++                .filter(|s| s != "Unknown Artist" && !s.is_empty())
++                .collect::<Vec<_>>()
++        })
++        .collect();
++    artists.sort();
++    artists.dedup();
++    playlist.tags = artists;
++
+     let file_path = get_playlist_path(&app, &folder_name)?;
+     save_playlist_to_disk(&file_path, &playlist)?;
+ 
+@@ -234,5 +281,7 @@ pub async fn import_folder_as_playlist(
+         name: folder_name,
+         track_count: playlist.tracks.len(),
+         cover_image: cover_image_path,
++        tags: playlist.tags,
++        folder_path: playlist.folder_path,
+     })
+ }
+diff --git a/src-tauri/tauri.conf.json b/src-tauri/tauri.conf.json
+index 0297340..79063ee 100644
+--- a/src-tauri/tauri.conf.json
++++ b/src-tauri/tauri.conf.json
+@@ -24,7 +24,7 @@
+     ],
+     "security": {
+       "capabilities": ["default"],
+-      "csp": "default-src 'self' data: http://asset.localhost 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ws: wss: http://asset.localhost http://127.0.0.1:33333; media-src 'self' data: http://asset.localhost;",
++      "csp": "default-src 'self' data: http://asset.localhost 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ws: wss: http://asset.localhost http://127.0.0.1:33333; media-src 'self' data: http://asset.localhost; img-src 'self' data: http://asset.localhost asset:;",
+       "assetProtocol": {
+         "enable": true,
+         "scope": ["**"]
+diff --git a/src/App.tsx b/src/App.tsx
+index 703259d..c9db644 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -152,7 +152,7 @@ const AppContent: React.FC = () => {
+ 
+   // --- Playlist Logic (Still in App.tsx for now as it bridges UI and state) ---
+ 
+-  const handleSavePlaylist = async (name: string) => {
++  const handleSavePlaylist = async (name: string, tags: string[]) => {
+     try {
+       const tracksToSave = queue.map((t) => ({
+         path: t.path,
+@@ -163,7 +163,12 @@ const AppContent: React.FC = () => {
+         album: t.album === "Unknown Album" ? null : t.album,
+       }));
+ 
+-      await invoke("save_playlist", { name, tracks: tracksToSave });
++      await invoke("save_playlist", { 
++        name, 
++        tracks: tracksToSave, 
++        tags,
++        folder_path: null
++      });
+       alert(`Playlist "${name}" saved!`);
+       setIsSaveModalOpen(false);
+     } catch (e) {
+@@ -264,6 +269,7 @@ const AppContent: React.FC = () => {
+             <Home
+               onPlayPlaylist={playPlaylist}
+               onViewPlaylist={handleViewPlaylist}
++              searchQuery={searchQuery}
+             />
+           )}
+         </div>
+diff --git a/src/components/ContextMenu.tsx b/src/components/ContextMenu.tsx
+index a600e64..e1cefdd 100644
+--- a/src/components/ContextMenu.tsx
++++ b/src/components/ContextMenu.tsx
+@@ -1,5 +1,5 @@
+ import React, { useEffect, useRef } from "react";
+-import { Edit3, Trash2, Info } from "lucide-react";
++import { Edit3, Trash2, Info, FolderOpen } from "lucide-react";
+ 
+ interface ContextMenuProps {
+   x: number;
+@@ -7,6 +7,7 @@ interface ContextMenuProps {
+   onClose: () => void;
+   onEditMetadata: () => void;
+   onFileInfo: () => void;
++  onRevealInExplorer: () => void;
+   onRemove: () => void;
+ }
+ 
+@@ -16,6 +17,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
+   onClose,
+   onEditMetadata,
+   onFileInfo,
++  onRevealInExplorer,
+   onRemove,
+ }) => {
+   const menuRef = useRef<HTMLDivElement>(null);
+@@ -68,6 +70,16 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
+         <Info size={16} className="text-blue-400" />
+         File Info
+       </button>
++      <button
++        onClick={() => {
++          onRevealInExplorer();
++          onClose();
++        }}
++        className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/10 transition-colors flex items-center gap-3"
++      >
++        <FolderOpen size={16} className="text-yellow-400" />
++        Open File Location
++      </button>
+       <div className="border-t border-white/5 my-1" />
+       <button
+         onClick={() => {
+diff --git a/src/components/Home.tsx b/src/components/Home.tsx
+index 5fadb05..1d1ae83 100644
+--- a/src/components/Home.tsx
++++ b/src/components/Home.tsx
+@@ -1,4 +1,4 @@
+-import React, { useState, useEffect } from "react";
++import React, { useState, useEffect, useMemo, useRef } from "react";
+ import { invoke } from "@tauri-apps/api/core";
+ import { open } from "@tauri-apps/plugin-dialog";
+ import { Plus, Loader2, RefreshCw, Music, FolderUp } from "lucide-react";
+@@ -8,11 +8,19 @@ import { PlaylistSummary } from "../types";
+ interface HomeProps {
+   onPlayPlaylist: (name: string) => void;
+   onViewPlaylist: (name: string) => void;
++  searchQuery: string;
+ }
+ 
+-const Home: React.FC<HomeProps> = ({ onPlayPlaylist, onViewPlaylist }) => {
++const PAGE_SIZE = 50;
++
++const Home: React.FC<HomeProps> = ({ onPlayPlaylist, onViewPlaylist, searchQuery }) => {
+   const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
+   const [loading, setLoading] = useState(true);
++  const [selectedTag, setSelectedTag] = useState<string | null>(null);
++  const [sortBy, setSortBy] = useState<"name" | "tracks">("name");
++  
++  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
++  const observerTarget = useRef<HTMLDivElement>(null);
+ 
+   const loadPlaylists = async () => {
+     try {
+@@ -26,6 +34,43 @@ const Home: React.FC<HomeProps> = ({ onPlayPlaylist, onViewPlaylist }) => {
+     }
+   };
+ 
++  const allTags = useMemo(() => {
++    return Array.from(new Set(playlists.flatMap(p => p.tags || []))).sort();
++  }, [playlists]);
++
++  const filteredAndSortedPlaylists = useMemo(() => {
++    const query = searchQuery.toLowerCase();
++    return playlists
++      .filter(p => !selectedTag || p.tags?.includes(selectedTag))
++      .filter(p => !query || p.name.toLowerCase().includes(query) || p.tags?.some(tag => tag.toLowerCase().includes(query)))
++      .sort((a, b) => {
++        if (sortBy === "name") return a.name.localeCompare(b.name);
++        if (sortBy === "tracks") return b.track_count - a.track_count;
++        return 0;
++      });
++  }, [playlists, selectedTag, searchQuery, sortBy]);
++
++  useEffect(() => {
++    setVisibleCount(PAGE_SIZE);
++  }, [selectedTag, searchQuery, sortBy]);
++
++  useEffect(() => {
++    const observer = new IntersectionObserver(
++      (entries) => {
++        if (entries[0].isIntersecting) {
++          setVisibleCount(prev => prev + PAGE_SIZE);
++        }
++      },
++      { threshold: 0.1 }
++    );
++    
++    if (observerTarget.current) {
++      observer.observe(observerTarget.current);
++    }
++    
++    return () => observer.disconnect();
++  }, []);
++
+   const handleImportFolder = async () => {
+     try {
+       const selected = await open({
+@@ -76,7 +121,7 @@ const Home: React.FC<HomeProps> = ({ onPlayPlaylist, onViewPlaylist }) => {
+         <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-2xl shadow-cyan-500/20 ring-1 ring-white/10">
+           <Music size={40} className="text-white" />
+         </div>
+-        <div className="flex-1">
++        <div className="flex-1 text-glow text-cyan-500/20">
+           <h1 className="text-5xl font-bold text-white mb-2 tracking-tight">
+             {getGreeting()}
+           </h1>
+@@ -88,29 +133,68 @@ const Home: React.FC<HomeProps> = ({ onPlayPlaylist, onViewPlaylist }) => {
+ 
+       {/* Playlists Section */}
+       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+-        <div className="flex items-center justify-between mb-8">
+-          <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+-            Your Playlists
+-            <span className="text-sm font-normal text-gray-500 bg-white/5 px-2 py-0.5 rounded-full">
+-              {playlists.length}
+-            </span>
+-          </h2>
+-          <div className="flex items-center gap-2">
+-            <button
+-              onClick={handleImportFolder}
+-              className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-full transition-all active:scale-95 border border-white/10 text-sm font-medium"
+-            >
+-              <FolderUp size={18} className="text-cyan-400" />
+-              Import Folder
+-            </button>
+-            <button
+-              onClick={loadPlaylists}
+-              className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-all active:scale-95"
+-              title="Refresh Playlists"
+-            >
+-              <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
+-            </button>
++        <div className="flex flex-col gap-6 mb-8">
++          <div className="flex items-center justify-between">
++            <h2 className="text-2xl font-bold text-white flex items-center gap-3">
++              Your Playlists
++              <span className="text-sm font-normal text-gray-500 bg-white/5 px-2 py-0.5 rounded-full">
++                {filteredAndSortedPlaylists.length}
++              </span>
++            </h2>
++            <div className="flex items-center gap-2">
++              <select 
++                value={sortBy}
++                onChange={(e) => setSortBy(e.target.value as any)}
++                className="bg-white/5 border border-white/10 rounded-full py-1.5 px-4 text-sm text-gray-400 focus:outline-none focus:border-cyan-500/50 appearance-none cursor-pointer hover:bg-white/10 transition-all font-medium"
++              >
++                <option value="name">Sort by Name</option>
++                <option value="tracks">Sort by Tracks</option>
++              </select>
++              <button
++                onClick={handleImportFolder}
++                className="flex items-center gap-2 px-4 py-1.5 bg-white/5 hover:bg-white/10 text-white rounded-full transition-all active:scale-95 border border-white/10 text-sm font-medium"
++              >
++                <FolderUp size={18} className="text-cyan-400" />
++                Import Folder
++              </button>
++              <button
++                onClick={loadPlaylists}
++                className="p-2 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-all active:scale-95"
++                title="Refresh Playlists"
++              >
++                <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
++              </button>
++            </div>
+           </div>
++
++          {/* Tags Cloud */}
++          {allTags.length > 0 && (
++            <div className="flex flex-wrap gap-2 py-4 border-y border-white/5">
++              <button
++                onClick={() => setSelectedTag(null)}
++                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
++                  selectedTag === null
++                    ? "bg-cyan-500 text-black shadow-lg shadow-cyan-500/30"
++                    : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
++                }`}
++              >
++                All Playlists
++              </button>
++              {allTags.map(tag => (
++                <button
++                  key={tag}
++                  onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
++                  className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
++                    selectedTag === tag
++                      ? "bg-cyan-500 text-black shadow-lg shadow-cyan-500/30"
++                      : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5"
++                  }`}
++                >
++                  {tag}
++                </button>
++              ))}
++            </div>
++          )}
+         </div>
+ 
+         {loading ? (
+@@ -118,32 +202,48 @@ const Home: React.FC<HomeProps> = ({ onPlayPlaylist, onViewPlaylist }) => {
+             <Loader2 className="animate-spin text-cyan-500" size={40} />
+             <p className="text-gray-500 text-sm">Loading your collection...</p>
+           </div>
+-        ) : playlists.length === 0 ? (
++        ) : filteredAndSortedPlaylists.length === 0 ? (
+           <div className="flex flex-col items-center justify-center py-20 bg-white/5 border border-white/5 rounded-2xl border-dashed">
+             <div className="w-20 h-20 bg-gray-800/50 rounded-full flex items-center justify-center mb-6 ring-1 ring-white/10">
+               <Plus size={32} className="text-gray-500" />
+             </div>
+             <h3 className="text-xl font-bold text-white mb-2">
+-              No playlists yet
++              {selectedTag ? `No playlists tagged with "${selectedTag}"` : "No playlists yet"}
+             </h3>
+             <p className="text-gray-400 mb-8 max-w-sm text-center">
+-              Start by adding songs to your queue and saving them as a playlist.
++              {selectedTag ? "Try exploring other categories or clear the filter." : "Start by adding songs to your queue and saving them as a playlist."}
+             </p>
++            {selectedTag && (
++               <button
++               onClick={() => setSelectedTag(null)}
++               className="bg-white/10 hover:bg-white/20 text-white px-6 py-2 rounded-full text-sm font-bold transition-all"
++             >
++               Clear Filters
++             </button>
++            )}
+           </div>
+         ) : (
+-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
+-            {playlists.map((playlist) => (
+-              <PlaylistCard
+-                key={playlist.name}
+-                name={playlist.name}
+-                trackCount={playlist.track_count}
+-                coverImage={playlist.cover_image}
+-                onPlay={() => onPlayPlaylist(playlist.name)}
+-                onView={() => onViewPlaylist(playlist.name)}
+-                onDelete={() => handleDelete(playlist.name)}
+-              />
+-            ))}
+-          </div>
++          <>
++            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6">
++              {filteredAndSortedPlaylists.slice(0, visibleCount).map((playlist) => (
++                <PlaylistCard
++                  key={playlist.name}
++                  name={playlist.name}
++                  trackCount={playlist.track_count}
++                  coverImage={playlist.cover_image}
++                  tags={playlist.tags}
++                  onPlay={() => onPlayPlaylist(playlist.name)}
++                  onView={() => onViewPlaylist(playlist.name)}
++                  onDelete={() => handleDelete(playlist.name)}
++                />
++              ))}
++            </div>
++            {visibleCount < filteredAndSortedPlaylists.length && (
++              <div ref={observerTarget} className="h-20 flex items-center justify-center mt-8">
++                <Loader2 className="animate-spin text-cyan-500/50" size={24} />
++              </div>
++            )}
++          </>
+         )}
+       </div>
+     </div>
+diff --git a/src/components/PlaylistCard.tsx b/src/components/PlaylistCard.tsx
+index 87d8ab7..132fafc 100644
+--- a/src/components/PlaylistCard.tsx
++++ b/src/components/PlaylistCard.tsx
+@@ -6,12 +6,13 @@ interface PlaylistCardProps {
+   name: string;
+   trackCount?: number;
+   coverImage?: string;
++  tags?: string[];
+   onPlay: () => void;
+   onView: () => void;
+   onDelete?: () => void;
+ }
+ 
+-const PlaylistCard: React.FC<PlaylistCardProps> = ({ name, trackCount, coverImage, onPlay, onView, onDelete }) => {
++const PlaylistCard: React.FC<PlaylistCardProps> = ({ name, trackCount, coverImage, tags = [], onPlay, onView, onDelete }) => {
+   return (
+     <div 
+       className="group relative bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-cyan-500/10 cursor-pointer"
+@@ -22,6 +23,7 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ name, trackCount, coverImag
+           <img 
+             src={convertFileSrc(coverImage)} 
+             alt={name} 
++            loading="lazy"
+             className="w-full h-full object-cover"
+           />
+         ) : (
+@@ -42,9 +44,9 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ name, trackCount, coverImag
+         </div>
+       </div>
+ 
+-      <div className="flex justify-between items-start">
++      <div className="flex justify-between items-start mb-1">
+         <div className="min-w-0 flex-1">
+-          <h3 className="font-bold text-white truncate pr-2 text-lg" title={name}>{name}</h3>
++          <h3 className="font-bold text-white line-clamp-2 pr-2 text-lg leading-tight h-[44px] overflow-hidden" title={name}>{name}</h3>
+           <p className="text-sm text-gray-400 font-medium">
+             {trackCount !== undefined ? `${trackCount} tracks` : 'Playlist'}
+           </p>
+@@ -63,6 +65,21 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ name, trackCount, coverImag
+           </button>
+         )}
+       </div>
++
++      {tags.length > 0 && (
++        <div className="flex flex-wrap gap-1 mt-2">
++          {tags.slice(0, 3).map(tag => (
++            <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 rounded-md border border-cyan-500/20 truncate max-w-[80px]">
++              {tag}
++            </span>
++          ))}
++          {tags.length > 3 && (
++            <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-gray-500 rounded-md">
++              +{tags.length - 3}
++            </span>
++          )}
++        </div>
++      )}
+     </div>
+   );
+ };
+diff --git a/src/components/PlaylistDetailView.tsx b/src/components/PlaylistDetailView.tsx
+index 8565177..082df3d 100644
+--- a/src/components/PlaylistDetailView.tsx
++++ b/src/components/PlaylistDetailView.tsx
+@@ -1,9 +1,10 @@
+ import React, { useEffect, useState } from 'react';
+ import { invoke } from '@tauri-apps/api/core';
+-import { ArrowLeft, Play, Clock, Music2, GripVertical, Pencil, Check, X } from 'lucide-react';
++import { ArrowLeft, Play, Clock, Music2, GripVertical, Pencil, Check, X, Plus, FolderUp, Trash2, FilePlus2, FolderOpen } from 'lucide-react';
+ import { Track, Playlist } from '../types';
+ import { open } from '@tauri-apps/plugin-dialog';
+ import { convertFileSrc } from '@tauri-apps/api/core';
++import { openPath } from '@tauri-apps/plugin-opener';
+ import {
+   DndContext,
+   closestCenter,
+@@ -38,11 +39,11 @@ const restrictToVerticalAxis: Modifier = ({ transform }) => {
+   };
+ };
+ 
+-// Visual component for the track row
+ const TrackRow = ({ 
+   track, 
+   index, 
+   formatDuration, 
++  onRemove,
+   isOverlay = false,
+   dragListeners,
+   dragAttributes
+@@ -50,13 +51,19 @@ const TrackRow = ({
+   track: Track, 
+   index: number, 
+   formatDuration: (s: number) => string,
++  onRemove?: () => void,
+   isOverlay?: boolean,
+   dragListeners?: any,
+   dragAttributes?: any
+ }) => {
++  const getFormat = (path: string) => {
++    const ext = path.split('.').pop()?.toUpperCase();
++    return ext || '???';
++  };
++
+   return (
+     <div 
+-      className={`grid grid-cols-[30px_16px_1fr_1fr_60px] gap-4 px-4 py-3 rounded-md items-center text-sm text-gray-400 
++      className={`grid grid-cols-[30px_16px_1fr_1fr_50px_60px_30px] gap-4 px-4 py-3 rounded-md items-center text-sm text-gray-400 
+         ${isOverlay ? 'bg-gray-800 shadow-xl border border-white/10' : 'hover:bg-white/5 hover:text-white group transition-colors'}
+       `}
+     >
+@@ -72,12 +79,24 @@ const TrackRow = ({
+       <div className={!isOverlay ? "group-hover:text-white" : ""}>{index + 1}</div>
+       <div className="font-medium text-white truncate">{track.title}</div>
+       <div className="truncate">{track.artist}</div>
++      <div className="text-[10px] font-bold text-gray-600 bg-white/5 px-1.5 py-0.5 rounded uppercase tracking-tighter text-center">{getFormat(track.path)}</div>
+       <div className="text-right font-mono text-xs">{formatDuration(track.duration)}</div>
++      <div className="flex justify-center">
++        {!isOverlay && (
++          <button 
++            onClick={(e) => { e.stopPropagation(); onRemove?.(); }}
++            className="p-1.5 rounded-md hover:bg-red-500/20 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
++            title="Remove from playlist"
++          >
++            <Trash2 size={14} />
++          </button>
++        )}
++      </div>
+     </div>
+   );
+ };
+ 
+-const SortableTrackItem = ({ track, index, formatDuration }: { track: Track, index: number, formatDuration: (s: number) => string }) => {
++const SortableTrackItem = ({ track, index, formatDuration, onRemove }: { track: Track, index: number, formatDuration: (s: number) => string, onRemove: () => void }) => {
+   const {
+     attributes,
+     listeners,
+@@ -99,6 +118,7 @@ const SortableTrackItem = ({ track, index, formatDuration }: { track: Track, ind
+         track={track} 
+         index={index} 
+         formatDuration={formatDuration} 
++        onRemove={onRemove}
+         dragListeners={listeners}
+         dragAttributes={attributes}
+       />
+@@ -109,12 +129,19 @@ const SortableTrackItem = ({ track, index, formatDuration }: { track: Track, ind
+ const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({ playlistName, onPlay, onBack, onRename }) => {
+   const [tracks, setTracks] = useState<Track[]>([]);
+   const [coverImage, setCoverImage] = useState<string | undefined>(undefined);
++  const [tags, setTags] = useState<string[]>([]);
++  const [folderPath, setFolderPath] = useState<string | undefined>(undefined);
+   const [loading, setLoading] = useState(true);
+   const [activeId, setActiveId] = useState<string | null>(null);
+   
+   // Rename state
+   const [isEditingTitle, setIsEditingTitle] = useState(false);
+   const [newTitle, setNewTitle] = useState(playlistName);
++  
++  // Tag state
++  const [isAddingTag, setIsAddingTag] = useState(false);
++  const [tagInput, setTagInput] = useState("");
++  const [allLibraryTags, setAllLibraryTags] = useState<string[]>([]);
+ 
+   const sensors = useSensors(
+     useSensor(PointerSensor),
+@@ -124,39 +151,95 @@ const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({ playlistName, o
+   );
+ 
+   useEffect(() => {
+-    const loadPlaylistData = async () => {
+-      try {
+-        setLoading(true);
+-        const playlist = await invoke<Playlist>('load_playlist', { name: playlistName });
+-        
+-        const mappedTracks: Track[] = playlist.tracks.map((t: any) => ({
+-          id: `${Date.now()}-${Math.random()}`, 
+-          path: t.path,
+-          filename: t.filename,
+-          duration: t.duration,
+-          artist: t.artist || 'Unknown Artist',
+-          title: t.title || 'Unknown',
+-          album: t.album || 'Unknown Album',
+-          metadataLoaded: true,
+-        }));
+-        
+-        setTracks(mappedTracks);
+-        setCoverImage(playlist.cover_image);
+-        setNewTitle(playlistName);
+-      } catch (e) {
+-        console.error("Failed to load playlist:", e);
+-      } finally {
+-        setLoading(false);
+-      }
+-    };
++    if (isAddingTag) {
++        const fetchAllTags = async () => {
++            try {
++                const playlistsResult = await invoke<any[]>('get_playlists');
++                const uniqueTags = Array.from(new Set(playlistsResult.flatMap(p => p.tags || []))).sort();
++                setAllLibraryTags(uniqueTags);
++            } catch (e) {
++                console.error("Failed to fetch library tags:", e);
++            }
++        };
++        fetchAllTags();
++    }
++  }, [isAddingTag]);
+ 
++  const loadPlaylistData = async () => {
++    try {
++      setLoading(true);
++      const playlist = await invoke<Playlist>('load_playlist', { name: playlistName });
++      
++      const mappedTracks: Track[] = playlist.tracks.map((t: any) => ({
++        id: `${Date.now()}-${Math.random()}`, 
++        path: t.path,
++        filename: t.filename,
++        duration: t.duration,
++        artist: t.artist || 'Unknown Artist',
++        title: t.title || 'Unknown',
++        album: t.album || 'Unknown Album',
++        metadataLoaded: true,
++      }));
++      
++      const fallbackPath = playlist.tracks.length > 0 
++        ? playlist.tracks[0].path.replace(/\\[^\\]+$/, '').replace(/\/[^\/]+$/, '')
++        : undefined;
++
++      setTracks(mappedTracks);
++      setCoverImage(playlist.cover_image);
++      setTags(playlist.tags || []);
++      setFolderPath(playlist.folder_path || fallbackPath);
++      setNewTitle(playlistName);
++    } catch (e) {
++      console.error("Failed to load playlist:", e);
++    } finally {
++      setLoading(false);
++    }
++  };
++
++  useEffect(() => {
+     loadPlaylistData();
+   }, [playlistName]);
+ 
++  const handleAddTag = async (tagName?: string) => {
++    const nameToUse = (tagName || tagInput).trim();
++    if (!nameToUse) {
++        setIsAddingTag(false);
++        return;
++    }
++    
++    if (tags.includes(nameToUse)) {
++        setTagInput("");
++        setIsAddingTag(false);
++        return;
++    }
++
++    const updatedTags = [...tags, nameToUse];
++    try {
++        await invoke('update_playlist_tags', { name: playlistName, tags: updatedTags });
++        setTags(updatedTags);
++        setTagInput("");
++        setIsAddingTag(false);
++    } catch (e) {
++        console.error("Failed to add tag:", e);
++    }
++  };
++
++  const handleRemoveTag = async (tagToRemove: string) => {
++    const updatedTags = tags.filter(t => t !== tagToRemove);
++    try {
++        await invoke('update_playlist_tags', { name: playlistName, tags: updatedTags });
++        setTags(updatedTags);
++    } catch (e) {
++        console.error("Failed to remove tag:", e);
++    }
++  };
++
+   const handleEditImage = async () => {
+     try {
+       const file = await open({
+         multiple: false,
++        defaultPath: folderPath,
+         filters: [{
+           name: 'Images',
+           extensions: ['png', 'jpg', 'jpeg', 'webp']
+@@ -167,7 +250,6 @@ const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({ playlistName, o
+         const imagePath = file as string;
+         setCoverImage(imagePath);
+         
+-        // Save playlist with new image
+         const tracksToSave = tracks.map(t => ({
+             path: t.path,
+             filename: t.filename,
+@@ -180,7 +262,9 @@ const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({ playlistName, o
+         await invoke('save_playlist', { 
+           name: playlistName, 
+           tracks: tracksToSave,
+-          coverImage: imagePath
++          coverImage: imagePath,
++          tags: tags,
++          folder_path: folderPath
+         });
+       }
+     } catch (e) {
+@@ -224,7 +308,6 @@ const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({ playlistName, o
+             const [movedItem] = newTracks.splice(oldIndex, 1);
+             newTracks.splice(newIndex, 0, movedItem);
+             
+-            // Auto-save
+             const tracksToSave = newTracks.map(t => ({
+                 path: t.path,
+                 filename: t.filename,
+@@ -237,7 +320,9 @@ const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({ playlistName, o
+             invoke('save_playlist', { 
+               name: playlistName, 
+               tracks: tracksToSave,
+-              coverImage: coverImage 
++              coverImage: coverImage,
++              tags: tags,
++              folder_path: folderPath
+             })
+             .catch(e => console.error("Failed to auto-save playlist order:", e));
+ 
+@@ -258,11 +343,98 @@ const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({ playlistName, o
+   const activeTrack = activeId ? tracks.find(t => t.id === activeId) : null;
+   const activeIndex = activeId ? tracks.findIndex(t => t.id === activeId) : -1;
+ 
++  const handleRemoveTrack = async (index: number) => {
++    const newTracks = [...tracks];
++    newTracks.splice(index, 1);
++    setTracks(newTracks);
++    
++    // Auto-save
++    try {
++        const tracksToSave = newTracks.map(t => ({
++            path: t.path,
++            filename: t.filename,
++            duration: t.duration,
++            artist: t.artist === 'Unknown Artist' ? null : t.artist,
++            title: t.title === 'Unknown' ? null : t.title,
++            album: t.album === 'Unknown Album' ? null : t.album
++        }));
++        
++        await invoke('save_playlist', { 
++          name: playlistName, 
++          tracks: tracksToSave,
++          coverImage: coverImage,
++          tags: tags,
++          folder_path: folderPath
++        });
++    } catch (e) {
++        console.error("Failed to save playlist after removal:", e);
++    }
++  };
++
++  const handleAddTracks = async () => {
++    try {
++      const selected = await open({
++        multiple: true,
++        defaultPath: folderPath,
++        filters: [{
++          name: 'Audio',
++          extensions: ['mp3', 'm4a', 'flac', 'wav', 'ogg', 'opus']
++        }]
++      });
++
++      if (selected && Array.isArray(selected)) {
++        setLoading(true);
++        const newTrackResults = await Promise.all(
++          selected.map(path => invoke<any>('get_audio_metadata', { filePath: path, enableGapless: false }))
++        );
++
++        const mappedNewTracks: Track[] = newTrackResults.map((t: any) => ({
++          id: `${Date.now()}-${Math.random()}`,
++          path: t.path,
++          filename: t.filename,
++          duration: t.duration,
++          artist: t.artist || 'Unknown Artist',
++          title: t.title || 'Unknown',
++          album: t.album || 'Unknown Album',
++          metadataLoaded: true,
++        }));
++
++        const finalTracks = [...tracks, ...mappedNewTracks];
++        setTracks(finalTracks);
++
++        // Save
++        const tracksToSave = finalTracks.map(t => ({
++            path: t.path,
++            filename: t.filename,
++            duration: t.duration,
++            artist: t.artist === 'Unknown Artist' ? null : t.artist,
++            title: t.title === 'Unknown' ? null : t.title,
++            album: t.album === 'Unknown Album' ? null : t.album
++        }));
++        
++        await invoke('save_playlist', { 
++          name: playlistName, 
++          tracks: tracksToSave,
++          coverImage: coverImage,
++          tags: tags,
++          folder_path: folderPath
++        });
++      }
++    } catch (e) {
++      console.error("Failed to add tracks:", e);
++    } finally {
++      setLoading(false);
++    }
++  };
++
++  const suggestions = allLibraryTags.filter(t => 
++    !tags.includes(t) && 
++    t.toLowerCase().includes(tagInput.toLowerCase())
++  );
++
+   return (
+-    <div className="h-full flex flex-col bg-gradient-to-b from-gray-900 to-black overflow-hidden">
+-      {/* Single scrollable container */}
++    <div className="h-full flex flex-col bg-gradient-to-b from-gray-900 to-black overflow-hidden selection:bg-cyan-500/30">
+       <div className="flex-1 overflow-y-auto">
+-        {/* Header */}
+         <div className="p-8 pb-4">
+           <div className="flex items-start gap-6 mb-8">
+             <button 
+@@ -272,7 +444,6 @@ const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({ playlistName, o
+               <ArrowLeft size={24} />
+             </button>
+ 
+-            {/* Cover image */}
+             <div className="w-48 h-48 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg flex items-center justify-center shadow-2xl shadow-black/50 relative group overflow-hidden">
+               {coverImage ? (
+                 <img 
+@@ -293,7 +464,6 @@ const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({ playlistName, o
+               </button>
+             </div>
+ 
+-            {/* Title and info */}
+             <div className="flex flex-col justify-end flex-1">
+               <h4 className="text-sm font-bold text-white/60 uppercase tracking-wider mb-2">
+                 Playlist
+@@ -323,8 +493,8 @@ const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({ playlistName, o
+                   </button>
+                 </div>
+               ) : (
+-                <div className="group flex items-center gap-4 mb-6">
+-                  <h1 className="text-5xl font-bold text-white">
++                <div className="group flex items-center gap-4 mb-2">
++                  <h1 className="text-5xl font-bold text-white line-clamp-2 leading-tight">
+                     {playlistName}
+                   </h1>
+                   <button 
+@@ -336,13 +506,97 @@ const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({ playlistName, o
+                 </div>
+               )}
+ 
+-              <div className="flex items-center gap-4 text-gray-400 text-sm font-medium">
+-                <span>{tracks.length} songs</span>
++              <div className="flex flex-wrap items-center gap-2 mb-4 relative">
++                {tags.map(tag => (
++                  <div 
++                    key={tag} 
++                    className="group bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[11px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1.5 transition-all hover:bg-cyan-500/20"
++                  >
++                    {tag}
++                    <button 
++                      onClick={() => handleRemoveTag(tag)}
++                      className="hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
++                    >
++                      <X size={10} />
++                    </button>
++                  </div>
++                ))}
++                
++                {isAddingTag ? (
++                  <div className="flex flex-col relative">
++                    <input 
++                      type="text"
++                      value={tagInput}
++                      onChange={(e) => setTagInput(e.target.value)}
++                      onKeyDown={(e) => {
++                        if (e.key === 'Enter') handleAddTag();
++                        if (e.key === 'Escape') setIsAddingTag(false);
++                      }}
++                      autoFocus
++                      placeholder="Add tag..."
++                      className="bg-white/10 border border-cyan-500/30 rounded-full px-3 py-0.5 text-[11px] text-white focus:outline-none focus:border-cyan-500 focus:bg-white/20 w-32 transition-all placeholder:text-gray-500"
++                    />
++                    
++                    {isAddingTag && suggestions.length > 0 && (
++                        <div className="absolute top-full left-0 mt-2 bg-gray-900 border border-white/10 rounded-xl shadow-2xl p-2 z-50 min-w-[200px] animate-in fade-in slide-in-from-top-2 duration-200">
++                            <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold px-2 mb-1.5">Suggestions</p>
++                            <div className="flex flex-wrap gap-1">
++                                {suggestions.map(suggestion => (
++                                    <button
++                                        key={suggestion}
++                                        onClick={() => handleAddTag(suggestion)}
++                                        className="text-[11px] px-2 py-1 bg-white/5 hover:bg-cyan-500 hover:text-black rounded-lg text-gray-400 transition-all font-medium border border-white/5"
++                                    >
++                                        {suggestion}
++                                    </button>
++                                ))}
++                            </div>
++                        </div>
++                    )}
++                  </div>
++                ) : (
++                  <button 
++                    onClick={() => setIsAddingTag(true)}
++                    className="text-gray-500 hover:text-cyan-400 transition-all p-1 hover:scale-110 active:scale-95"
++                    title="Add Tag"
++                  >
++                    <Plus size={16} />
++                  </button>
++                )}
++              </div>
++
++              <div className="flex flex-col gap-1">
++                <div className="flex items-center gap-4 text-gray-400 text-sm font-medium">
++                  <span>{tracks.length} songs</span>
++                </div>
++                
++                {folderPath && (
++                  <div className="flex items-center gap-2">
++                    <div className="flex items-center gap-2 text-gray-500 text-xs font-medium hover:text-cyan-400/80 transition-colors group/path cursor-pointer" 
++                         onClick={() => {
++                           navigator.clipboard.writeText(folderPath);
++                         }}
++                         title="Click to copy path">
++                      <FolderUp size={14} className="group-hover/path:text-cyan-400" />
++                      <span className="group-hover/path">{folderPath}</span>
++                    </div>
++                    
++                    <div className="w-px h-3 bg-white/10 mx-1" />
++                    
++                    <button 
++                      onClick={() => openPath(folderPath)}
++                      className="p-1 rounded hover:bg-white/10 text-gray-500 hover:text-cyan-400 transition-colors flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider"
++                      title="Open in File Explorer"
++                    >
++                      <FolderOpen size={14} />
++                      Open
++                    </button>
++                  </div>
++                )}
+               </div>
+             </div>
+           </div>
+ 
+-          {/* Controls */}
+           <div className="flex items-center gap-4 px-2 mb-8">
+             <button 
+               onClick={onPlay}
+@@ -350,19 +604,26 @@ const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({ playlistName, o
+             >
+               <Play size={28} fill="currentColor" className="ml-1" />
+             </button>
++            <button 
++              onClick={handleAddTracks}
++              className="flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-full transition-all active:scale-95 border border-white/10 text-sm font-bold"
++            >
++              <FilePlus2 size={20} className="text-cyan-400" />
++              Add Songs
++            </button>
+           </div>
+         </div>
+ 
+-        {/* Track List Header */}
+-        <div className="grid grid-cols-[30px_16px_1fr_1fr_60px] gap-4 px-8 py-2 border-b border-white/10 text-gray-400 text-sm font-medium uppercase tracking-wider sticky top-0 bg-gray-900/95 backdrop-blur-sm z-10">
++        <div className="grid grid-cols-[30px_16px_1fr_1fr_50px_60px_30px] gap-4 px-8 py-2 border-b border-white/10 text-gray-400 text-[10px] font-bold uppercase tracking-widest sticky top-0 bg-gray-900/95 backdrop-blur-sm z-10 items-center">
+           <div></div>
+           <div>#</div>
+           <div>Title</div>
+           <div>Artist</div>
+-          <div className="flex justify-end"><Clock size={16} /></div>
++          <div className="text-center">Ext</div>
++          <div className="flex justify-end pr-2"><Clock size={16} /></div>
++          <div></div>
+         </div>
+ 
+-        {/* Track List */}
+         <div className="px-4 pb-8">
+           {loading ? (
+             <div className="py-8 text-center text-gray-500">Loading tracks...</div>
+@@ -387,6 +648,7 @@ const PlaylistDetailView: React.FC<PlaylistDetailViewProps> = ({ playlistName, o
+                           track={track}
+                           index={index}
+                           formatDuration={formatDuration}
++                          onRemove={() => handleRemoveTrack(index)}
+                       />
+                       ))}
+                   </div>
+diff --git a/src/components/QueueView.tsx b/src/components/QueueView.tsx
+index e394464..b150dbd 100644
+--- a/src/components/QueueView.tsx
++++ b/src/components/QueueView.tsx
+@@ -6,6 +6,7 @@ import ContextMenu from "./ContextMenu";
+ import MetadataEditorModal from "./MetadataEditorModal";
+ import FileInfoModal from "./FileInfoModal";
+ import { invoke } from "@tauri-apps/api/core";
++import { revealItemInDir } from "@tauri-apps/plugin-opener";
+ import {
+   DndContext,
+   closestCenter,
+@@ -426,6 +427,10 @@ const QueueView: React.FC<QueueViewProps> = ({
+             handleFileInfo(contextMenu.track);
+             setContextMenu(null);
+           }}
++          onRevealInExplorer={() => {
++            revealItemInDir(contextMenu.track.path);
++            setContextMenu(null);
++          }}
+           onRemove={() => {
+             removeFromQueue(contextMenu.index);
+             setContextMenu(null);
+@@ -451,4 +456,11 @@ const QueueView: React.FC<QueueViewProps> = ({
+   );
+ };
+ 
+-export default QueueView;
++export default React.memo(QueueView, (prevProps, nextProps) => {
++  return (
++    prevProps.queue === nextProps.queue &&
++    prevProps.currentTrackIndex === nextProps.currentTrackIndex &&
++    prevProps.isPlaying === nextProps.isPlaying &&
++    prevProps.searchQuery === nextProps.searchQuery
++  );
++});
+diff --git a/src/components/SavePlaylistModal.tsx b/src/components/SavePlaylistModal.tsx
+index f58e9fa..d3cdc19 100644
+--- a/src/components/SavePlaylistModal.tsx
++++ b/src/components/SavePlaylistModal.tsx
+@@ -4,22 +4,25 @@ import { X } from 'lucide-react';
+ interface SavePlaylistModalProps {
+   isOpen: boolean;
+   onClose: () => void;
+-  onSave: (name: string) => void;
++  onSave: (name: string, tags: string[]) => void;
+ }
+ 
+ const SavePlaylistModal: React.FC<SavePlaylistModalProps> = ({ isOpen, onClose, onSave }) => {
+   const [playlistName, setPlaylistName] = useState('');
++  const [tags, setTags] = useState('');
+ 
+   useEffect(() => {
+     if (isOpen) {
+       setPlaylistName('');
++      setTags('');
+     }
+   }, [isOpen]);
+ 
+   const handleSubmit = (e: React.FormEvent) => {
+     e.preventDefault();
+     if (playlistName.trim()) {
+-      onSave(playlistName.trim());
++      const tagList = tags.split(',').map(t => t.trim()).filter(t => t !== "");
++      onSave(playlistName.trim(), tagList);
+       onClose();
+     }
+   };
+@@ -40,7 +43,7 @@ const SavePlaylistModal: React.FC<SavePlaylistModalProps> = ({ isOpen, onClose,
+         </div>
+ 
+         <form onSubmit={handleSubmit}>
+-          <div className="mb-6">
++          <div className="mb-4">
+             <label htmlFor="playlist-name" className="block text-sm font-medium text-gray-300 mb-2">
+               Playlist Name
+             </label>
+@@ -55,6 +58,20 @@ const SavePlaylistModal: React.FC<SavePlaylistModalProps> = ({ isOpen, onClose,
+             />
+           </div>
+ 
++          <div className="mb-6">
++            <label htmlFor="playlist-tags" className="block text-sm font-medium text-gray-300 mb-2">
++              Tags (comma separated)
++            </label>
++            <input
++              id="playlist-tags"
++              type="text"
++              value={tags}
++              onChange={(e) => setTags(e.target.value)}
++              placeholder="e.g. Chill, Rock, Gaming"
++              className="w-full bg-gray-800 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
++            />
++          </div>
++
+           <div className="flex gap-3">
+             <button
+               type="button"
+diff --git a/src/types.ts b/src/types.ts
+index 2d36294..8d64192 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -24,12 +24,16 @@ export interface Playlist {
+   name: string;
+   tracks: Track[];
+   cover_image?: string;
++  tags?: string[];
++  folder_path?: string;
+ }
+ 
+ export interface PlaylistSummary {
+   name: string;
+   track_count: number;
+   cover_image?: string;
++  tags?: string[];
++  folder_path?: string;
+ }
+ 
+ export interface AudioFileInfo {
+diff --git a/src/visualizers/SurroundRenderer.ts b/src/visualizers/SurroundRenderer.ts
+index ce2ed59..42bc61d 100644
+--- a/src/visualizers/SurroundRenderer.ts
++++ b/src/visualizers/SurroundRenderer.ts
+@@ -10,6 +10,10 @@ export class SurroundRenderer implements IVisualizerRenderer {
+   private prevSurroundEnergies = new Float32Array(8); // C, L, R, SL, SR, BL, BR, LFE
+   private pointsX = new Float32Array(181);
+   private pointsY = new Float32Array(181);
++  
++  // Prevent memory thrashing by caching array allocations
++  private channelArrays: Uint8Array[] = [];
++  private currentBufferLength = 0;
+ 
+   // Static speaker layout for performance
+   private static readonly SPEAKER_LAYOUT = [
+@@ -54,14 +58,23 @@ export class SurroundRenderer implements IVisualizerRenderer {
+ 
+     analyser.getByteFrequencyData(dataArray as any);
+ 
++    // Re-allocate arrays if buffer length changes
++    if (this.currentBufferLength !== bufferLength) {
++      this.currentBufferLength = bufferLength;
++      this.channelArrays = Array.from({ length: 8 }, () => new Uint8Array(bufferLength));
++    }
++
+     // --- 7.1 SURROUND DATA PROCESSING ---
+     const channelData: Uint8Array[] = [];
+     if (channels && channels.length >= 2) {
+-      channels.forEach((ch) => {
+-        const arr = new Uint8Array(bufferLength);
+-        ch.getByteFrequencyData(arr as any);
++      for (let i = 0; i < channels.length; i++) {
++        if (!this.channelArrays[i]) {
++          this.channelArrays[i] = new Uint8Array(bufferLength);
++        }
++        const arr = this.channelArrays[i];
++        channels[i].getByteFrequencyData(arr as any);
+         channelData.push(arr);
+-      });
++      }
+     } else {
+       channelData.push(dataArray);
+       channelData.push(dataArray);

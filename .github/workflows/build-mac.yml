@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-macos:
-    runs-on: macos-latest
+    runs-runs-on: macos-latest
 
     steps:
       - name: Checkout repository
@@ -18,8 +18,6 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          # If your package-lock.json is in the subfolder, tell the cache where to look
-          cache-dependency-path: pancake-player/package-lock.json
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -27,25 +25,25 @@ jobs:
           targets: aarch64-apple-darwin
 
       - name: Install frontend dependencies
-        # Changed 'ci' to 'install' to bypass the lockfile error
-        run: npm install
-        working-directory: pancake-player
+        # Since package-lock.json exists at the root, npm ci will now work
+        run: npm ci
 
       - name: Build Tauri app (Apple Silicon)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          projectPath: pancake-player
+          # Removed projectPath because everything is at the root
           args: --target aarch64-apple-darwin
           includeUpdaterJson: false
 
-      - name: List bundle output
-        run: find pancake-player/src-tauri/target/aarch64-apple-darwin/release/bundle -type f 2>/dev/null || echo "Bundle dir not found"
+      - name: List bundle output (Debug)
+        run: find src-tauri/target/aarch64-apple-darwin/release/bundle -type f 2>/dev/null || echo "Bundle dir not found"
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
           name: pancake-player-macos-arm
-          path: pancake-player/src-tauri/target/aarch64-apple-darwin/release/bundle/
+          # Standard path relative to the root
+          path: src-tauri/target/aarch64-apple-darwin/release/bundle/
           retention-days: 14
