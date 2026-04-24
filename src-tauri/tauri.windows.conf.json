@@ -1,0 +1,6 @@
+{
+  "bundle": {
+    "targets": ["nsis", "msi"],
+    "externalBin": ["../bin/discord-bridge"]
+  }
+}

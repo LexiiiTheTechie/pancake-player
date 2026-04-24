@@ -26,42 +26,49 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            use std::sync::Mutex;
-            use tauri_plugin_shell::ShellExt;
+            #[cfg(target_os = "windows")]
+            {
+                use std::sync::Mutex;
+                use tauri_plugin_shell::ShellExt;
 
-            // Launch the discord-bridge sidecar automatically
-            let sidecar_command = app.shell().sidecar("discord-bridge");
-            match sidecar_command {
-                Ok(cmd) => {
-                    match cmd.spawn() {
-                        Ok(child) => {
-                            // Store the child process so we can kill it later
-                            app.manage(Mutex::new(Some(child)));
-                            println!("✅ Sidecar: Discord Presence Bridge started.");
-                        }
-                        Err(e) => {
-                            println!("❌ Sidecar: Failed to spawn: {}", e);
+                // Launch the discord-bridge sidecar automatically (Windows only)
+                let sidecar_command = app.shell().sidecar("discord-bridge");
+                match sidecar_command {
+                    Ok(cmd) => {
+                        match cmd.spawn() {
+                            Ok(child) => {
+                                app.manage(Mutex::new(Some(child)));
+                                println!("✅ Sidecar: Discord Presence Bridge started.");
+                            }
+                            Err(e) => {
+                                println!("❌ Sidecar: Failed to spawn: {}", e);
+                            }
                         }
                     }
-                }
-                Err(e) => {
-                    println!("❌ Sidecar: Failed to create command: {}", e);
+                    Err(e) => {
+                        println!("❌ Sidecar: Failed to create command: {}", e);
+                    }
                 }
             }
+
             Ok(())
         })
         .on_window_event(|window, event| {
-            use std::sync::Mutex;
             use tauri::WindowEvent;
-            use tauri_plugin_shell::process::CommandChild;
 
             if let WindowEvent::Destroyed = event {
-                // Kill the sidecar when the window closes
-                if let Some(state) = window.try_state::<Mutex<Option<CommandChild>>>() {
-                    if let Ok(mut guard) = state.try_lock() {
-                        if let Some(child) = guard.take() {
-                            let _ = child.kill();
-                            println!("🛑 Sidecar: Discord bridge terminated.");
+                // Kill the sidecar when the window closes (Windows only)
+                #[cfg(target_os = "windows")]
+                {
+                    use std::sync::Mutex;
+                    use tauri_plugin_shell::process::CommandChild;
+
+                    if let Some(state) = window.try_state::<Mutex<Option<CommandChild>>>() {
+                        if let Ok(mut guard) = state.try_lock() {
+                            if let Some(child) = guard.take() {
+                                let _ = child.kill();
+                                println!("🛑 Sidecar: Discord bridge terminated.");
+                            }
                         }
                     }
                 }
