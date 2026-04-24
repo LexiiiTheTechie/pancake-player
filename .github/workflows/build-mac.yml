@@ -33,10 +33,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: --target aarch64-apple-darwin
+          includeUpdaterJson: false
+
+      - name: List bundle output
+        run: find src-tauri/target/aarch64-apple-darwin/release/bundle -type f 2>/dev/null || echo "Bundle dir not found"
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
           name: pancake-player-macos-arm
-          path: src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/
+          path: src-tauri/target/aarch64-apple-darwin/release/bundle/
           retention-days: 14
