@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-macos:
-    runs-runs-on: macos-latest
+    runs-on: macos-latest
 
     steps:
       - name: Checkout repository
@@ -25,25 +25,22 @@ jobs:
           targets: aarch64-apple-darwin
 
       - name: Install frontend dependencies
-        # Since package-lock.json exists at the root, npm ci will now work
         run: npm ci
 
-      - name: Build Tauri app (Apple Silicon)
-        uses: tauri-apps/tauri-action@v0
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Tauri app
+        run: npm run tauri build -- --target aarch64-apple-darwin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # Removed projectPath because everything is at the root
-          args: --target aarch64-apple-darwin
-          includeUpdaterJson: false
 
-      - name: List bundle output (Debug)
-        run: find src-tauri/target/aarch64-apple-darwin/release/bundle -type f 2>/dev/null || echo "Bundle dir not found"
+      - name: List bundle output
+        run: find src-tauri/target/aarch64-apple-darwin/release/bundle -type f
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
           name: pancake-player-macos-arm
-          # Standard path relative to the root
-          path: src-tauri/target/aarch64-apple-darwin/release/bundle/
+          path: src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/
           retention-days: 14
