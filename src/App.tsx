@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 // Components
@@ -8,6 +8,7 @@ import TopBar from "./components/TopBar";
 import PlayerBar from "./components/PlayerBar";
 import QueueView from "./components/QueueView";
 import VisualizerView from "./components/VisualizerView";
+import FavouritesView from "./components/FavouritesView";
 import DragDropOverlay from "./components/DragDropOverlay";
 import PlaylistDetailView from "./components/PlaylistDetailView";
 import TitleBar from "./components/TitleBar";
@@ -24,7 +25,9 @@ import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 
 // Types
-import { Track, Tab } from "./types";
+import { Track, Tab, PlaylistSummary } from "./types";
+
+const FAVOURITE_TAGS_KEY = "pancake_favourite_tags";
 
 const AppContent: React.FC = () => {
   const { settings, currentStyle, setCurrentStyle } = useSettings();
@@ -38,6 +41,43 @@ const AppContent: React.FC = () => {
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [viewingPlaylist, setViewingPlaylist] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // --- Library State ---
+  const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
+  const [favouriteTags, setFavouriteTags] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(FAVOURITE_TAGS_KEY);
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const loadPlaylists = useCallback(async () => {
+    try {
+      const loadedPlaylists = await invoke<PlaylistSummary[]>("get_playlists");
+      setPlaylists(loadedPlaylists);
+    } catch (e) {
+      console.error("Failed to load playlists:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPlaylists();
+  }, [loadPlaylists]);
+
+  useEffect(() => {
+    localStorage.setItem(FAVOURITE_TAGS_KEY, JSON.stringify([...favouriteTags]));
+  }, [favouriteTags]);
+
+  const toggleFavouriteTag = useCallback((tag: string) => {
+    setFavouriteTags(prev => {
+      const next = new Set(prev);
+      if (next.has(tag)) next.delete(tag);
+      else next.add(tag);
+      return next;
+    });
+  }, []);
 
   // --- Hook Integration ---
 
@@ -170,6 +210,7 @@ const AppContent: React.FC = () => {
         folder_path: null
       });
       alert(`Playlist "${name}" saved!`);
+      loadPlaylists();
       setIsSaveModalOpen(false);
     } catch (e) {
       console.error("Failed to save playlist:", e);
@@ -220,6 +261,15 @@ const AppContent: React.FC = () => {
     }
   };
 
+  const handleDeletePlaylist = async (name: string) => {
+    if (confirm(`Are you sure you want to delete "${name}"?`)) {
+      try {
+        await invoke("delete_playlist", { name });
+        loadPlaylists();
+      } catch (e) { console.error(e); }
+    }
+  };
+
   const handleViewPlaylist = (name: string) => {
     setViewingPlaylist(name);
     setActiveTab("playlist");
@@ -267,9 +317,30 @@ const AppContent: React.FC = () => {
         >
           {activeTab === "home" && (
             <Home
+              playlists={playlists}
+              favouriteTags={favouriteTags}
+              onToggleFavourite={toggleFavouriteTag}
+              onRefresh={loadPlaylists}
               onPlayPlaylist={playPlaylist}
               onViewPlaylist={handleViewPlaylist}
+              onDeletePlaylist={handleDeletePlaylist}
               searchQuery={searchQuery}
+            />
+          )}
+        </div>
+
+        {/* Favourites Layer */}
+        <div
+          className={`absolute inset-0 overflow-hidden bg-gray-950 transition-opacity duration-300 ${
+            activeTab === ("favourites" as Tab) ? "opacity-100 z-10" : "opacity-0 -z-10"
+          }`}
+        >
+          {activeTab === ("favourites" as Tab) && (
+            <FavouritesView
+              playlists={playlists}
+              favouriteTags={favouriteTags}
+              onPlayPlaylist={playPlaylist}
+              onViewPlaylist={handleViewPlaylist}
             />
           )}
         </div>

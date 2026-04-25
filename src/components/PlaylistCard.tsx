@@ -12,7 +12,7 @@ interface PlaylistCardProps {
   onDelete?: () => void;
 }
 
-const PlaylistCard: React.FC<PlaylistCardProps> = ({ name, trackCount, coverImage, tags = [], onPlay, onView, onDelete }) => {
+const PlaylistCard: React.FC<PlaylistCardProps> = React.memo(({ name, trackCount, coverImage, tags = [], onPlay, onView, onDelete }) => {
   return (
     <div 
       className="group relative bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-cyan-500/10 cursor-pointer"
@@ -82,6 +82,6 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ name, trackCount, coverImag
       )}
     </div>
   );
-};
+});
 
 export default PlaylistCard;

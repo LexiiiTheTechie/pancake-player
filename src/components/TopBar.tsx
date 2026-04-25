@@ -1,5 +1,5 @@
 import React from "react";
-import { Search, Music2, Home as HomeIcon, Plus, Settings } from "lucide-react";
+import { Search, Music2, Home as HomeIcon, Plus, Settings, Heart } from "lucide-react";
 import { Tab, VisualizerStyle } from "../types";
 
 interface TopBarProps {
@@ -61,6 +61,16 @@ const TopBar: React.FC<TopBarProps> = ({
             }`}
           >
             <HomeIcon size={16} /> Home
+          </button>
+          <button
+            onClick={() => setActiveTab("favourites" as Tab)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
+              activeTab === ("favourites" as Tab)
+                ? "bg-white/10 text-white"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            <Heart size={16} className={activeTab === ("favourites" as Tab) ? "fill-red-500 text-red-500" : ""} /> Favourites
           </button>
           <button
             onClick={() => setActiveTab("queue")}
