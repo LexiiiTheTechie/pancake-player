@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useDeferredValue } from 'react';
-import { ChevronDown, ChevronRight, Music, Play, Star, Sparkles, Search } from 'lucide-react';
+import { ChevronDown, Music, Play, Star, Sparkles, Search } from 'lucide-react';
 import { PlaylistSummary } from '../types';
 import { convertFileSrc } from '@tauri-apps/api/core';
 
@@ -104,43 +104,48 @@ const FavouritesView: React.FC<FavouritesViewProps> = ({ playlists, favouriteTag
                   </div>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-500 group-hover:text-white group-hover:bg-white/10 transition-all">
-                  {expandedSections[tag] ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                  <ChevronDown 
+                    size={20} 
+                    className={`transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${expandedSections[tag] ? 'rotate-0' : '-rotate-90'}`}
+                  />
                 </div>
               </div>
 
-              {expandedSections[tag] && (
-                <div className="px-6 pb-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6 gap-5 animate-in slide-in-from-top-4 duration-500">
-                  {tagPlaylists.map((playlist) => (
-                    <div
-                      key={playlist.name}
-                      className="group/item flex flex-col gap-3 p-4 bg-black/20 rounded-[2rem] border border-white/5 hover:bg-white/5 transition-all duration-300 cursor-pointer"
-                      onClick={() => onViewPlaylist(playlist.name)}
-                    >
-                      <div className="aspect-square bg-gray-800 rounded-[1.5rem] flex-shrink-0 relative overflow-hidden shadow-xl group-hover/item:shadow-cyan-500/10 transition-all">
-                        {playlist.cover_image ? (
-                          <img src={convertFileSrc(playlist.cover_image)} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Music size={32} className="text-gray-700 group-hover/item:text-cyan-500/50 transition-colors" />
-                          </div>
-                        )}
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); onPlayPlaylist(playlist.name); }}
-                          className="absolute inset-0 bg-black/40 opacity-0 group-hover/item:opacity-100 flex items-center justify-center transition-all duration-300 backdrop-blur-[2px]"
-                        >
-                          <div className="w-12 h-12 rounded-full bg-cyan-500 flex items-center justify-center text-black scale-75 group-hover/item:scale-100 transition-transform">
-                            <Play size={20} fill="currentColor" className="ml-1" />
-                          </div>
-                        </button>
+              <div 
+                className={`transition-all duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] overflow-hidden will-change-[max-height,opacity] [transform:translateZ(0)] ${expandedSections[tag] ? 'max-h-[1200px] opacity-100' : 'max-h-0 opacity-0'}`}
+              >
+                <div className={`px-6 pb-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6 gap-5 transition-all duration-700 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${expandedSections[tag] ? 'translate-y-0 opacity-100' : '-translate-y-12 opacity-0'}`}>
+                    {tagPlaylists.map((playlist) => (
+                      <div
+                        key={playlist.name}
+                        className="group/item flex flex-col gap-3 p-4 bg-black/20 rounded-[2rem] border border-white/5 hover:bg-white/5 transition-all duration-300 cursor-pointer"
+                        onClick={() => onViewPlaylist(playlist.name)}
+                      >
+                        <div className="aspect-square bg-gray-800 rounded-[1.5rem] flex-shrink-0 relative overflow-hidden shadow-xl group-hover/item:shadow-cyan-500/10 transition-all">
+                          {playlist.cover_image ? (
+                            <img src={convertFileSrc(playlist.cover_image)} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Music size={32} className="text-gray-700 group-hover/item:text-cyan-500/50 transition-colors" />
+                            </div>
+                          )}
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); onPlayPlaylist(playlist.name); }}
+                            className="absolute inset-0 bg-black/40 opacity-0 group-hover/item:opacity-100 flex items-center justify-center transition-all duration-300 backdrop-blur-[2px]"
+                          >
+                            <div className="w-12 h-12 rounded-full bg-cyan-500 flex items-center justify-center text-black scale-75 group-hover/item:scale-100 transition-transform">
+                              <Play size={20} fill="currentColor" className="ml-1" />
+                            </div>
+                          </button>
+                        </div>
+                        <div className="min-w-0 px-2">
+                          <h4 className="font-bold text-[15px] truncate text-white/90 group-hover/item:text-cyan-400 transition-colors">{playlist.name}</h4>
+                          <p className="text-[11px] text-gray-500 font-bold uppercase tracking-tighter">{playlist.track_count} tracks</p>
+                        </div>
                       </div>
-                      <div className="min-w-0 px-2">
-                        <h4 className="font-bold text-[15px] truncate text-white/90 group-hover/item:text-cyan-400 transition-colors">{playlist.name}</h4>
-                        <p className="text-[11px] text-gray-500 font-bold uppercase tracking-tighter">{playlist.track_count} tracks</p>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
-              )}
+              </div>
             </div>
           ))
         ) : (

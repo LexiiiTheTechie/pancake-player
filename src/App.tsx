@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 // Components
@@ -332,10 +332,10 @@ const AppContent: React.FC = () => {
         {/* Favourites Layer */}
         <div
           className={`absolute inset-0 overflow-hidden bg-gray-950 transition-opacity duration-300 ${
-            activeTab === ("favourites" as Tab) ? "opacity-100 z-10" : "opacity-0 -z-10"
+            activeTab === "favourites" ? "opacity-100 z-10" : "opacity-0 -z-10"
           }`}
         >
-          {activeTab === ("favourites" as Tab) && (
+          {activeTab === "favourites" && (
             <FavouritesView
               playlists={playlists}
               favouriteTags={favouriteTags}

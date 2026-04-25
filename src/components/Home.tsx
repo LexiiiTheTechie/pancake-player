@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Plus, Loader2, RefreshCw, Music, FolderUp, Star, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Loader2, RefreshCw, Music, FolderUp, ChevronDown } from "lucide-react";
 import PlaylistCard from "./PlaylistCard";
 import TagContextMenu from "./TagContextMenu";
 import { PlaylistSummary } from "../types";
@@ -17,8 +17,6 @@ interface HomeProps {
   searchQuery: string;
 }
 
-const PAGE_SIZE = 50;
-
 interface TagMenu {
   x: number;
   y: number;
@@ -29,14 +27,50 @@ const Home: React.FC<HomeProps> = ({ playlists, favouriteTags, onToggleFavourite
   const [loading, setLoading] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"name" | "tracks">("name");
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [tagMenu, setTagMenu] = useState<TagMenu | null>(null);
   const [isTagsExpanded, setIsTagsExpanded] = useState(false);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [columns, setColumns] = useState(2);
+  const [gridOffset, setGridOffset] = useState(500);
 
-  const observerTarget = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const gridWrapperRef = useRef<HTMLDivElement>(null);
   
   // Defer the search query to prevent laggy typing
   const deferredSearchQuery = useDeferredValue(searchQuery);
+
+  const updateGridOffset = useCallback(() => {
+    if (gridWrapperRef.current) {
+      setGridOffset(gridWrapperRef.current.offsetTop);
+    }
+  }, []);
+
+  // Responsive column detection logic
+  useEffect(() => {
+    const updateCols = () => {
+      const w = window.innerWidth;
+      if (w >= 1536) setColumns(6);
+      else if (w >= 1280) setColumns(5);
+      else if (w >= 1024) setColumns(4);
+      else if (w >= 768) setColumns(3);
+      else setColumns(2);
+      
+      updateGridOffset();
+    };
+    updateCols();
+    window.addEventListener('resize', updateCols);
+    return () => window.removeEventListener('resize', updateCols);
+  }, [playlists, updateGridOffset]);
+
+  // Recalculate virtualization offset only after the dropdown animation finishes.
+  // This prevents the virtualizer from thrashing rows while the layout is shifting.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      updateGridOffset();
+    }, 450); // Matches transition duration + small buffer
+
+    return () => clearTimeout(timer);
+  }, [isTagsExpanded, updateGridOffset]);
 
   const allTags = useMemo(() => {
     return Array.from(new Set(playlists.flatMap(p => p.tags || []))).sort();
@@ -61,26 +95,24 @@ const Home: React.FC<HomeProps> = ({ playlists, favouriteTags, onToggleFavourite
       });
   }, [playlists, selectedTag, deferredSearchQuery, sortBy]);
 
-  // Reset pagination when filters change
-  useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
-  }, [selectedTag, deferredSearchQuery, sortBy]);
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    // Use requestAnimationFrame if needed, but React 18 batching is usually sufficient
+    setScrollTop(e.currentTarget.scrollTop);
+  };
 
-  // Infinite scroll observer — re-attach when list changes so sentinel re-attaches correctly
-  useEffect(() => {
-    const el = observerTarget.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisibleCount(prev => prev + PAGE_SIZE);
-        }
-      },
-      { threshold: 0.1 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [filteredAndSortedPlaylists]);
+  // Virtualization calculations - Optimized for 165fps
+  const ROW_HEIGHT = 420; 
+  const bufferRows = 3; // Increased buffer to prevent white gaps during fast scrolling
+  const itemsPerRow = columns;
+  const startRow = Math.max(0, Math.floor((scrollTop - gridOffset) / ROW_HEIGHT) - bufferRows);
+  const endRow = startRow + Math.ceil(window.innerHeight / ROW_HEIGHT) + (bufferRows * 2);
+  
+  const visiblePlaylists = useMemo(() => {
+    return filteredAndSortedPlaylists.slice(startRow * itemsPerRow, endRow * itemsPerRow);
+  }, [filteredAndSortedPlaylists, startRow, endRow, itemsPerRow]);
+
+  const paddingTop = startRow * ROW_HEIGHT;
+  const totalHeight = Math.ceil(filteredAndSortedPlaylists.length / itemsPerRow) * ROW_HEIGHT;
 
   const handleImportFolder = async () => {
     try {
@@ -125,7 +157,12 @@ const Home: React.FC<HomeProps> = ({ playlists, favouriteTags, onToggleFavourite
     }`;
 
   return (
-    <div className="p-8 pb-32 overflow-y-auto h-full bg-gradient-to-b from-gray-900 via-gray-900 to-black">
+    <div 
+      ref={containerRef} 
+      onScroll={handleScroll} 
+      className="p-8 pb-32 overflow-y-auto h-full bg-gradient-to-b from-gray-900 via-gray-900 to-black"
+      style={{ overflowAnchor: 'none' }} // Crucial: Fixes the "push up" jump when scrolling down
+    >
       {/* Hero */}
       <div className="mb-12 flex flex-col md:flex-row items-start md:items-end gap-6 border-b border-white/5 pb-10">
         <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-2xl shadow-cyan-500/20 ring-1 ring-white/10">
@@ -196,7 +233,7 @@ const Home: React.FC<HomeProps> = ({ playlists, favouriteTags, onToggleFavourite
                 </div>
               </div>
               
-              <div className={`relative flex flex-wrap gap-2 transition-[max-height] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] will-change-[max-height] ${isTagsExpanded ? "max-h-[1000px] pb-4" : "max-h-[84px] overflow-hidden"}`}>
+              <div className={`relative flex flex-wrap gap-2 transition-[max-height] duration-400 ease-[cubic-bezier(0.2,0.8,0.2,1)] overflow-hidden will-change-[max-height] [transform:translateZ(0)] ${isTagsExpanded ? "max-h-[600px] pb-8" : "max-h-[84px]"}`}>
                 <button
                   onClick={() => setSelectedTag(null)}
                   className={tagButtonClass(selectedTag === null)}
@@ -234,9 +271,9 @@ const Home: React.FC<HomeProps> = ({ playlists, favouriteTags, onToggleFavourite
                   </button>
                 ))}
 
-                {/* Smooth blur fade for the collapsed state */}
+                {/* High-performance permanent blur overlay with opacity transition */}
                 <div 
-                  className={`absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-gray-900 via-gray-900/95 to-transparent pointer-events-none backdrop-blur-[2px] z-10 transition-all duration-500 ease-in-out ${isTagsExpanded ? 'opacity-0 invisible' : 'opacity-100 visible'}`} 
+                  className={`absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-gray-900 via-gray-900/95 to-transparent pointer-events-none backdrop-blur-[1.5px] z-10 transition-all duration-300 ease-in-out ${isTagsExpanded ? 'opacity-0 invisible' : 'opacity-100 visible'}`} 
                 />
               </div>
             </div>
@@ -271,11 +308,18 @@ const Home: React.FC<HomeProps> = ({ playlists, favouriteTags, onToggleFavourite
             )}
           </div>
         ) : (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 will-change-transform">
-              {filteredAndSortedPlaylists.slice(0, visibleCount).map((playlist, idx) => (
+          <div 
+            ref={gridWrapperRef} 
+            className="relative" 
+            style={{ height: `${totalHeight}px` }}
+          >
+            <div 
+              className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 will-change-transform absolute inset-x-0 top-0"
+              style={{ transform: `translate3d(0, ${paddingTop}px, 0)` }} // GPU accelerated positioning
+            >
+              {visiblePlaylists.map((playlist, idx) => (
                 <PlaylistCard
-                  key={`${playlist.name}-${idx}`}
+                  key={`${playlist.name}-${startRow * itemsPerRow + idx}`}
                   name={playlist.name}
                   trackCount={playlist.track_count}
                   coverImage={playlist.cover_image}
@@ -286,12 +330,7 @@ const Home: React.FC<HomeProps> = ({ playlists, favouriteTags, onToggleFavourite
                 />
               ))}
             </div>
-            {visibleCount < filteredAndSortedPlaylists.length && (
-              <div ref={observerTarget} className="h-20 flex items-center justify-center mt-8">
-                <Loader2 className="animate-spin text-cyan-500/50" size={24} />
-              </div>
-            )}
-          </>
+          </div>
         )}
       </div>
 

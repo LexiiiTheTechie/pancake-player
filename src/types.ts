@@ -54,7 +54,7 @@ export interface AudioFileInfo {
 }
 
 export type RepeatMode = "none" | "all" | "one";
-export type Tab = "queue" | "visualizer" | "home" | "playlist" | "legal";
+export type Tab = "queue" | "visualizer" | "home" | "playlist" | "legal" | "favourites";
 export type VisualizerStyle =
   | "mirror"
   | "standard"

@@ -63,14 +63,14 @@ const TopBar: React.FC<TopBarProps> = ({
             <HomeIcon size={16} /> Home
           </button>
           <button
-            onClick={() => setActiveTab("favourites" as Tab)}
+            onClick={() => setActiveTab("favourites")}
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
-              activeTab === ("favourites" as Tab)
+              activeTab === "favourites"
                 ? "bg-white/10 text-white"
                 : "text-gray-400 hover:text-white"
             }`}
           >
-            <Heart size={16} className={activeTab === ("favourites" as Tab) ? "fill-red-500 text-red-500" : ""} /> Favourites
+            <Heart size={16} className={activeTab === "favourites" ? "fill-red-500 text-red-500" : ""} /> Favourites
           </button>
           <button
             onClick={() => setActiveTab("queue")}
