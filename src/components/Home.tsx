@@ -196,7 +196,7 @@ const Home: React.FC<HomeProps> = ({ playlists, favouriteTags, onToggleFavourite
                 </div>
               </div>
               
-              <div className={`relative flex flex-wrap gap-2 transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${isTagsExpanded ? "max-h-[1000px] pb-4" : "max-h-[84px] overflow-hidden"}`}>
+              <div className={`relative flex flex-wrap gap-2 transition-[max-height] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] will-change-[max-height] ${isTagsExpanded ? "max-h-[1000px] pb-4" : "max-h-[84px] overflow-hidden"}`}>
                 <button
                   onClick={() => setSelectedTag(null)}
                   className={tagButtonClass(selectedTag === null)}
@@ -235,9 +235,9 @@ const Home: React.FC<HomeProps> = ({ playlists, favouriteTags, onToggleFavourite
                 ))}
 
                 {/* Smooth blur fade for the collapsed state */}
-                {!isTagsExpanded && (
-                  <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-gray-900 via-gray-900/80 to-transparent pointer-events-none backdrop-blur-[1px] z-10" />
-                )}
+                <div 
+                  className={`absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-gray-900 via-gray-900/95 to-transparent pointer-events-none backdrop-blur-[2px] z-10 transition-all duration-500 ease-in-out ${isTagsExpanded ? 'opacity-0 invisible' : 'opacity-100 visible'}`} 
+                />
               </div>
             </div>
           )}

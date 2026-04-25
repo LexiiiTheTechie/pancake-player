@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Play, Music2, Trash2 } from 'lucide-react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 
@@ -13,18 +13,61 @@ interface PlaylistCardProps {
 }
 
 const PlaylistCard: React.FC<PlaylistCardProps> = React.memo(({ name, trackCount, coverImage, tags = [], onPlay, onView, onDelete }) => {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShouldLoad(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px' } // Start loading when within 200px of viewport
+    );
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!shouldLoad || !coverImage) return;
+
+    const img = new Image();
+    const src = convertFileSrc(coverImage);
+    img.src = src;
+
+    // The magic: .decode() returns a promise that resolves when the image 
+    // is fully decoded off the main thread.
+    img.decode()
+      .then(() => {
+        setIsLoaded(true);
+      })
+      .catch((encodingError) => {
+        console.error("Image decode failed:", encodingError);
+        // Fallback if decode fails
+        setIsLoaded(false);
+      });
+  }, [shouldLoad, coverImage]);
+
   return (
     <div 
+      ref={containerRef}
       className="group relative bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-cyan-500/10 cursor-pointer"
+      style={{ contentVisibility: 'auto', containIntrinsicSize: '300px 400px' }}
       onClick={onView}
     >
       <div className="aspect-square bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg mb-4 flex items-center justify-center relative overflow-hidden group-hover:from-gray-800 group-hover:to-gray-800 transition-colors">
-        {coverImage ? (
+        {coverImage && isLoaded ? (
           <img 
             src={convertFileSrc(coverImage)} 
             alt={name} 
-            loading="lazy"
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover animate-in fade-in duration-500"
           />
         ) : (
           <Music2 size={48} className="text-gray-600 group-hover:text-cyan-500 transition-colors duration-300" />
